@@ -1,4 +1,11 @@
-use std::{env, path::PathBuf, process::Command};
+use std::{
+    env,
+    io::{BufRead, BufReader, Write},
+    path::PathBuf,
+    process::{Command, Stdio},
+    thread,
+    time::Duration,
+};
 
 #[derive(Debug, Default)]
 struct XBPatchArgs {
@@ -38,6 +45,7 @@ fn main() {
         },
     };
 
+    // Extract the ISO
     let iso: PathBuf = args.iso_path.take().expect("Expected an iso path.");
 
     if !iso.exists() {
@@ -46,32 +54,44 @@ fn main() {
         error_exit("The iso provided is not a file.");
     }
 
-    let output = if cfg!(target_os = "windows") {
+    if cfg!(target_os = "windows") {
         todo!();
         // Command::new("cmd")
         //     .args(["/C", "echo hello"])
         //     .output()
         //     .expect("failed to execute process")
     } else {
-        Command::new("extract-xiso")
+        let extraction_dir = "./xbpatch_temp/isos/isoname";
+
+        std::fs::create_dir_all(extraction_dir).expect("Unable to create xbpatch dir.");
+
+        let mut extractor = Command::new("extract-xiso")
             .arg("-x")
             .arg(&iso)
             .arg("-d")
-            .arg("./xbpatch_temp")
-            .output()
-            .expect("failed to extract iso")
+            .arg(extraction_dir)
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to start extract-xiso");
+
+        let xiso_stdout_reader =
+            BufReader::new(extractor.stdout.take().expect("Failed to capture stdout"));
+
+        let reader = std::thread::spawn(move || {
+            for line in xiso_stdout_reader.lines() {
+                if let Ok(line) = line {
+                    print!("{}", line);
+                    std::thread::sleep(Duration::from_millis(10));
+                };
+            }
+        });
+        extractor.wait().expect("Failed to wait on extract-xiso");
+        reader.join().expect("Unable to join reader thread.");
     };
 
-    if !output.stderr.is_empty() {
-        let iso_string = iso
-            .into_os_string()
-            .into_string()
-            .expect("Unable to get OsString from iso path.");
-        let msg: String = format!("Unable to extract {}", iso_string);
-        let desc = str::from_utf8(&output.stderr).expect("ISO path is not UTF-8 path.");
+    // Grab default.xbe out of it
 
-        error_exit_with_details(msg, desc);
-    }
+    // Parse the config
 }
 
 fn parse_args(args: env::Args) -> Result<XBPatchArgs, ArgError> {
