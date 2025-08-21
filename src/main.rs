@@ -54,44 +54,66 @@ fn main() {
         error_exit("The iso provided is not a file.");
     }
 
-    if cfg!(target_os = "windows") {
-        todo!();
-        // Command::new("cmd")
-        //     .args(["/C", "echo hello"])
-        //     .output()
-        //     .expect("failed to execute process")
-    } else {
-        let extraction_dir = "./xbpatch_temp/isos/isoname";
+    let extraction_dir: PathBuf = "./xbpatch_temp/isos/isoname".into();
 
-        std::fs::create_dir_all(extraction_dir).expect("Unable to create xbpatch dir.");
+    // If the folder exists and the user wants to delete it, then delete it
+    if extraction_dir.exists() && extraction_dir.is_dir() {
+        let skip_extraction = prompt_user_bool(format!(
+            "Extraction dir {} already exists.\nWould you like to skip extraction and use this folder instead?",
+            extraction_dir.to_str().unwrap()
+        ));
+        if !skip_extraction {
+            std::fs::remove_dir_all(&extraction_dir).expect("Unable to delete existing folder.");
+        }
+    }
 
-        let mut extractor = Command::new("extract-xiso")
-            .arg("-x")
-            .arg(&iso)
-            .arg("-d")
-            .arg(extraction_dir)
-            .stdout(Stdio::piped())
-            .spawn()
-            .expect("Failed to start extract-xiso");
+    // If the folder doesn't exist (or the user just deleted it), then extract the game
+    if !extraction_dir.exists() {
+        std::fs::create_dir_all(&extraction_dir).expect("Unable to create xbpatch dir.");
 
-        let xiso_stdout_reader =
-            BufReader::new(extractor.stdout.take().expect("Failed to capture stdout"));
+        if cfg!(target_os = "windows") {
+            todo!();
+        } else {
+            let mut extractor = Command::new("extract-xiso")
+                .arg("-x")
+                .arg(&iso)
+                .arg("-d")
+                .arg(extraction_dir)
+                .stdout(Stdio::piped())
+                .spawn()
+                .expect("Failed to start extract-xiso");
 
-        let reader = std::thread::spawn(move || {
-            for line in xiso_stdout_reader.lines() {
-                if let Ok(line) = line {
-                    print!("{}", line);
-                    std::thread::sleep(Duration::from_millis(10));
-                };
-            }
-        });
-        extractor.wait().expect("Failed to wait on extract-xiso");
-        reader.join().expect("Unable to join reader thread.");
-    };
+            let xiso_stdout_reader =
+                BufReader::new(extractor.stdout.take().expect("Failed to capture stdout"));
+
+            let reader = std::thread::spawn(move || {
+                for line in xiso_stdout_reader.lines() {
+                    if let Ok(line) = line {
+                        print!("{}", line);
+                        std::thread::sleep(Duration::from_millis(10));
+                    };
+                }
+            });
+            extractor.wait().expect("Failed to wait on extract-xiso");
+            reader.join().expect("Unable to join reader thread.");
+        };
+    }
 
     // Grab default.xbe out of it
 
     // Parse the config
+}
+
+fn prompt_user_bool(msg: String) -> bool {
+    print!("{} (y/n): ", msg);
+    std::io::stdout().flush().expect("Unable to flush stdout.");
+
+    let mut user_input = String::new();
+    std::io::stdin()
+        .read_line(&mut user_input)
+        .expect("Failed to read line");
+
+    user_input.to_lowercase().starts_with("y")
 }
 
 fn parse_args(args: env::Args) -> Result<XBPatchArgs, ArgError> {
