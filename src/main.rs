@@ -21,16 +21,57 @@ enum ArgError {
     IsoSpecifiedMultipleTimes,
 }
 
-fn error_exit_with_details(message: impl AsRef<str>, details: impl AsRef<str>) -> ! {
-    eprintln!("Unable to continue.");
-    eprint!("Error: {}\nDetails: {}", message.as_ref(), details.as_ref());
-    std::process::exit(1);
-}
+// Usage
+// xbpatch gbtg.iso --config gbtg.xbconf
 
-fn error_exit(message: impl AsRef<str>) -> ! {
-    eprintln!("Unable to continue.");
-    eprint!("Error: {}", message.as_ref());
-    std::process::exit(1);
+fn main() {
+    // Parse args
+    let mut args = match parse_args(env::args()) {
+        Ok(a) => a,
+        Err(e) => match e {
+            ArgError::InvalidArgState => {
+                error_exit("Unable to proceed: Invalid arguments.");
+            }
+            ArgError::IsoSpecifiedMultipleTimes => {
+                error_exit("Unable to proceed: Iso has been specified multiple times.");
+            }
+        },
+    };
+
+    let iso: PathBuf = args.iso_path.take().expect("Expected an iso path.");
+
+    if !iso.exists() {
+        error_exit("The iso provided does not exist.");
+    } else if !iso.is_file() {
+        error_exit("The iso provided is not a file.");
+    }
+
+    let output = if cfg!(target_os = "windows") {
+        todo!();
+        // Command::new("cmd")
+        //     .args(["/C", "echo hello"])
+        //     .output()
+        //     .expect("failed to execute process")
+    } else {
+        Command::new("extract-xiso")
+            .arg("-x")
+            .arg(&iso)
+            .arg("-d")
+            .arg("./xbpatch_temp")
+            .output()
+            .expect("failed to extract iso")
+    };
+
+    if !output.stderr.is_empty() {
+        let iso_string = iso
+            .into_os_string()
+            .into_string()
+            .expect("Unable to get OsString from iso path.");
+        let msg: String = format!("Unable to extract {}", iso_string);
+        let desc = str::from_utf8(&output.stderr).expect("ISO path is not UTF-8 path.");
+
+        error_exit_with_details(msg, desc);
+    }
 }
 
 fn parse_args(args: env::Args) -> Result<XBPatchArgs, ArgError> {
@@ -76,52 +117,14 @@ fn parse_args(args: env::Args) -> Result<XBPatchArgs, ArgError> {
     }
 }
 
-fn main() {
-    // Parse args
-    let mut args = match parse_args(env::args()) {
-        Ok(a) => a,
-        Err(e) => match e {
-            ArgError::InvalidArgState => {
-                error_exit("Unable to proceed: Invalid arguments.");
-            }
-            ArgError::IsoSpecifiedMultipleTimes => {
-                error_exit("Unable to proceed: Iso has been specified multiple times.");
-            }
-        },
-    };
-
-    let iso: PathBuf = args.iso_path.take().expect("Expected an iso path.");
-
-    let output = if cfg!(target_os = "windows") {
-        todo!();
-        // Command::new("cmd")
-        //     .args(["/C", "echo hello"])
-        //     .output()
-        //     .expect("failed to execute process")
-    } else {
-        Command::new("extract-xiso")
-            .arg("-x")
-            .arg(&iso)
-            .arg("-d")
-            .arg("./xbpatch_temp")
-            .output()
-            .expect("failed to extract iso")
-    };
-
-    if !output.stderr.is_empty() {
-        let iso_string = iso
-            .into_os_string()
-            .into_string()
-            .expect("Unable to get OsString from iso path.");
-        let msg: String = format!("Unable to extract {}", iso_string);
-        let desc = str::from_utf8(&output.stderr).expect("ISO path is not UTF-8 path.");
-
-        error_exit_with_details(msg, desc);
-    }
-
-    dbg!(&str::from_utf8(&output.stdout));
-    dbg!(&str::from_utf8(&output.stderr));
+fn error_exit_with_details(message: impl AsRef<str>, details: impl AsRef<str>) -> ! {
+    eprintln!("Unable to continue.");
+    eprint!("Error: {}\nDetails: {}", message.as_ref(), details.as_ref());
+    std::process::exit(1);
 }
 
-// Usage
-// xbpatch gbtg.iso --config gbtg.xbconf
+fn error_exit(message: impl AsRef<str>) -> ! {
+    eprintln!("Unable to continue.");
+    eprint!("Error: {}", message.as_ref());
+    std::process::exit(1);
+}
