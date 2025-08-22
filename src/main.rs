@@ -1,13 +1,17 @@
 use std::{
     env,
-    io::{BufRead, BufReader, Write},
+    fs::{File, OpenOptions},
+    io::{BufRead, BufReader, Read, Seek, SeekFrom, Write},
     path::PathBuf,
     process::{Command, Stdio},
-    thread,
     time::Duration,
 };
 
+mod memory_mapping;
+
 use walkdir::WalkDir;
+
+use crate::memory_mapping::{MemoryMap, MemoryMapping};
 
 #[derive(Debug, Default)]
 struct XBPatchArgs {
@@ -30,23 +34,17 @@ enum ArgError {
     IsoSpecifiedMultipleTimes,
 }
 
-impl MemoryMapping {
-    fn contains_block(&self, block_start: usize, block_size: usize) -> bool {
-        block_start < self.size && (self.size - block_start - block_size) < self.size
-    }
-}
-
 #[derive(Debug)]
-struct MemoryMapping {
-    live_offset: u32,
-    size: usize,
-    file_offset: u32,
+enum GamePatchOffsetType {
+    Raw,
+    Virtual,
 }
 
 #[derive(Debug)]
 struct GamePatch {
     name: String,
-    patch_offset: u32,
+    offset: u32,
+    offset_type: GamePatchOffsetType,
     replacement_bytes: Vec<u8>,
     original_bytes: Option<Vec<u8>>,
 }
@@ -129,12 +127,92 @@ fn main() {
     }
 
     // Grab default.xbe out of it
-    let xbe = match find_file_in_folder("default.xbe".into(), PathBuf::from(&extraction_dir)) {
+    let xbe_path = match find_file_in_folder("default.xbe".into(), PathBuf::from(&extraction_dir)) {
         Some(x) => x,
         None => error_exit("Unable to find default.xbe in the .iso files."),
-    }
+    };
+
+    match backup_file(&xbe_path) {
+        Ok(b) => b,
+        Err(_) => {
+            error_exit("Unable to blah blah blah");
+        }
+    };
 
     // Parse the config
+
+    // Write the patches
+    // TODO: Generate the memory map from the .xbe file instead of having to manually enter it
+    let mem = MemoryMap::new(vec![
+        MemoryMapping {
+            file_start: 0x0,
+            virtual_start: 0x00010000,
+            size: 0xf60,
+        },
+        MemoryMapping {
+            file_start: 0x1000,
+            virtual_start: 0x00011000,
+            size: 0x160020,
+        },
+    ]);
+
+    let mut xbe_writer =
+        XBEWriter::new(&xbe_path, mem).expect("Unable to create new XBE writer to apply patches.");
+
+    let patches = vec![GamePatch {
+        name: String::from("Force 1sec cutscenes"),
+        offset: 0x4d5ac,
+        offset_type: GamePatchOffsetType::Virtual,
+        replacement_bytes: vec![0x90, 0x90, 0x90, 0x90, 0x90, 0x90],
+        original_bytes: Some(vec![0xf3, 0x0f, 0x10, 0x3c, 0x24, 0x08]),
+    }];
+
+    patches.iter().for_each(|p| {
+        // TODO: Remove these unwraps
+        print!("Applying patch \"{}\"...  ", &p.name);
+        std::io::stdout().flush().expect("Unable to flush stdout");
+
+        match xbe_writer.apply_patch(p) {
+            Ok(_) => println!("DONE!"),
+            Err(_) => println!("FAILED!\n        Failed to apply {}.", &p.name),
+        };
+    });
+
+    println!("All patches applied successfully.");
+}
+
+#[derive(Debug)]
+struct XBEWriter {
+    xbe_file: File,
+    mem_map: MemoryMap,
+}
+
+impl XBEWriter {
+    pub fn new(path: &PathBuf, mem_map: MemoryMap) -> Result<XBEWriter, std::io::Error> {
+        let xbe = match OpenOptions::new().read(true).write(true).open(&path) {
+            Ok(f) => f,
+            Err(_) => error_exit(format!(
+                "Unable to open file {} for writing.",
+                path.to_str().unwrap()
+            )),
+        };
+
+        Ok(XBEWriter {
+            xbe_file: xbe,
+            mem_map,
+        })
+    }
+
+    pub fn apply_patch(&mut self, patch: &GamePatch) -> Result<(), std::io::Error> {
+        let offset: u64 = match patch.offset_type {
+            GamePatchOffsetType::Raw => patch.offset.into(),
+            GamePatchOffsetType::Virtual => self.mem_map.get_raw_offset(patch.offset)?.into(),
+        };
+
+        self.xbe_file.seek(SeekFrom::Start(offset));
+        self.xbe_file.write(patch.replacement_bytes.as_ref())?;
+        Ok(())
+    }
 }
 
 fn prompt_user_bool(msg: String) -> bool {
@@ -214,4 +292,64 @@ fn find_file_in_folder(file: PathBuf, folder: PathBuf) -> Option<PathBuf> {
     }
 
     None
+}
+
+// #[must_use]
+fn backup_file(filepath: &PathBuf) -> Result<PathBuf, std::io::Error> {
+    let mut new_filepath: PathBuf = filepath.clone();
+
+    if let Some(filename) = filepath.file_name() {
+        let mut backup_name = filename.to_os_string();
+        backup_name.push(".bak");
+        new_filepath.set_file_name(backup_name);
+
+        // Do not overwrite if it exists
+        // TODO: Make this an option or prompt to the user
+        if new_filepath.exists() {
+            return Ok(new_filepath);
+        }
+
+        std::fs::copy(filepath, &new_filepath)?;
+        Ok(new_filepath)
+    } else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "File has no filename",
+        ));
+    }
+}
+
+fn execute_command(command: &str, args: std::process::CommandArgs) -> Result<(), std::io::Error> {
+    // If the folder doesn't exist (or the user just deleted it), then extract the game
+    if cfg!(target_os = "windows") {
+        todo!();
+    } else {
+        let mut extractor = Command::new(command)
+            .args(args)
+            .stdout(Stdio::piped())
+            .spawn()?;
+        // .expect("Failed to start extract-xiso");
+
+        let estd = extractor.stdout.take().ok_or(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed to capture stdout",
+        ))?;
+
+        let command_stdout_reader = BufReader::new(estd);
+
+        let reader = std::thread::spawn(move || {
+            for line in command_stdout_reader.lines() {
+                if let Ok(line) = line {
+                    print!("{}", line);
+                    std::thread::sleep(Duration::from_millis(10));
+                };
+            }
+        });
+        extractor.wait()?;
+        // .expect("Failed to wait on extract-xiso");
+        reader.join();
+        // .expect("Unable to join reader thread.");
+    };
+
+    Ok(())
 }
