@@ -101,35 +101,6 @@ fn main() {
         std::fs::create_dir_all(&extraction_dir).expect("Unable to create xbpatch dir.");
 
         xiso::extract_iso(&iso, &extraction_dir);
-
-        /*
-        if cfg!(target_os = "windows") {
-            todo!();
-        } else {
-            let mut extractor = Command::new("extract-xiso")
-                .arg("-x")
-                .arg(&iso)
-                .arg("-d")
-                .arg(&extraction_dir)
-                .stdout(Stdio::piped())
-                .spawn()
-                .expect("Failed to start extract-xiso");
-
-            let xiso_stdout_reader =
-                BufReader::new(extractor.stdout.take().expect("Failed to capture stdout"));
-
-            let reader = std::thread::spawn(move || {
-                for line in xiso_stdout_reader.lines() {
-                    if let Ok(line) = line {
-                        print!("{}", line);
-                        std::thread::sleep(Duration::from_millis(10));
-                    };
-                }
-            });
-            extractor.wait().expect("Failed to wait on extract-xiso");
-            reader.join().expect("Unable to join reader thread.");
-        };
-        */
     }
 
     // Grab default.xbe out of it
@@ -149,24 +120,6 @@ fn main() {
     //
     let mut xbe_writer =
         XBEWriter::new(&xbe_path).expect("Unable to create new XBE writer to apply patches.");
-
-    /*
-    let patches = vec![GamePatch {
-        name: String::from("Force 1sec cutscenes"),
-        offset: 0x4d5ac,
-        offset_type: GamePatchOffsetType::Virtual,
-        replacement_bytes: vec![0x90, 0x90, 0x90, 0x90, 0x90, 0x90],
-        original_bytes: Some(vec![0xf3, 0x0f, 0x10, 0x3c, 0x24, 0x08]),
-    }];
-
-    let patches = vec![GamePatch {
-        name: String::from("Remove celebration"),
-        offset: 0x2bb36,
-        offset_type: GamePatchOffsetType::Virtual,
-        replacement_bytes: vec![0x90, 0x90, 0x90, 0x90, 0x90, 0x90],
-        original_bytes: None,
-    }];
-    */
 
     let patches: Vec<GamePatch> = vec![
         GamePatch {
@@ -300,8 +253,8 @@ impl XBEWriter {
             GamePatchOffsetType::Virtual => self.mem_map.get_raw_offset(patch.offset)?.into(),
         };
 
-        self.xbe_file.seek(SeekFrom::Start(offset));
-        self.xbe_file.write(patch.replacement_bytes.as_ref())?;
+        self.xbe_file.seek(SeekFrom::Start(offset))?;
+        self.xbe_file.write_all(patch.replacement_bytes.as_ref())?;
         Ok(())
     }
 }
@@ -361,6 +314,24 @@ fn parse_args(args: env::Args) -> Result<XBPatchArgs, ArgError> {
         Err(ArgError::InvalidArgState)
     }
 }
+
+/*
+let patches = vec![GamePatch {
+    name: String::from("Force 1sec cutscenes"),
+    offset: 0x4d5ac,
+    offset_type: GamePatchOffsetType::Virtual,
+    replacement_bytes: vec![0x90, 0x90, 0x90, 0x90, 0x90, 0x90],
+    original_bytes: Some(vec![0xf3, 0x0f, 0x10, 0x3c, 0x24, 0x08]),
+}];
+
+let patches = vec![GamePatch {
+    name: String::from("Remove celebration"),
+    offset: 0x2bb36,
+    offset_type: GamePatchOffsetType::Virtual,
+    replacement_bytes: vec![0x90, 0x90, 0x90, 0x90, 0x90, 0x90],
+    original_bytes: None,
+}];
+*/
 
 fn error_exit_with_details(message: impl AsRef<str>, details: impl AsRef<str>) -> ! {
     eprintln!("Unable to continue.");

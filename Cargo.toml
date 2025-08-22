@@ -1,7 +1,3 @@
-[package]
-name = "xbox-patcher"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-walkdir = "2.5.0"
+[workspace]
+members = ["cli", "gui"]
+resolver = "3"
