@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
+use std::path::PathBuf;
+
 use eframe::egui;
 
 fn main() -> eframe::Result {
@@ -10,22 +12,28 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
     eframe::run_native(
-        "My egui App",
+        "XBPatch",
         options,
         Box::new(|cc| Ok(Box::<MyApp>::default())),
     )
 }
 
+enum ISOStatus {
+    Valid,
+    Unknown,
+    Invalid,
+}
+
 struct MyApp {
-    name: String,
-    age: u32,
+    iso_path: String,
+    iso_status: ISOStatus,
 }
 
 impl Default for MyApp {
     fn default() -> Self {
         Self {
-            name: "Arthur".to_owned(),
-            age: 42,
+            iso_path: String::from(""),
+            iso_status: ISOStatus::Unknown,
         }
     }
 }
@@ -33,17 +41,98 @@ impl Default for MyApp {
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("My egui Application");
-            ui.horizontal(|ui| {
-                let name_label = ui.label("Your name: ");
-                ui.text_edit_singleline(&mut self.name)
-                    .labelled_by(name_label.id);
+            let width = ui.available_width();
+
+            ui.vertical_centered(|ui| {
+                ui.heading(format!("XBPatch v{}", env!("CARGO_PKG_VERSION")));
             });
-            ui.add(egui::Slider::new(&mut self.age, 0..=120).text("age"));
-            if ui.button("Increment").clicked() {
-                self.age += 1;
-            }
-            ui.label(format!("Hello '{}', age {}", self.name, self.age));
+
+            egui::SidePanel::right("scroll_test")
+                .max_width(0.45 * width)
+                .show_inside(ui, |ui| {
+                    ui.label(
+                        "The scroll area below has many labels with interactive tooltips. \
+                 The purpose is to test that the tooltips close when you scroll.",
+                    )
+                    .on_hover_text("Try hovering a label below, then scroll!");
+                    egui::ScrollArea::vertical()
+                        .auto_shrink(false)
+                        .show(ui, |ui| {
+                            for i in 0..1000 {
+                                ui.label(format!("This is line {i}")).on_hover_ui(|ui| {
+                                    ui.style_mut().interaction.selectable_labels = true;
+                                    ui.label(
+                            "This tooltip is interactive, because the text in it is selectable.",
+                        );
+                                });
+                            }
+                        });
+                });
+
+            egui::CentralPanel::default().show_inside(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.heading("ISO");
+
+                    ui.group(|ui| {
+                        ui.add(egui::TextEdit::singleline(&mut self.iso_path));
+                        if ui.button("Choose").clicked() {
+                            // TODO: Select file here
+                        }
+                    });
+
+                    let color = match self.iso_status {
+                        ISOStatus::Valid => egui::Color32::GREEN,
+                        ISOStatus::Invalid => egui::Color32::RED,
+                        ISOStatus::Unknown => egui::Color32::GRAY,
+                    };
+
+                    let text = match self.iso_status {
+                        ISOStatus::Valid => "ISO located.",
+                        ISOStatus::Unknown => "Unknown status.",
+                        ISOStatus::Invalid => "Unable to locate ISO on disk.",
+                    };
+
+                    ui.colored_label(color, text);
+                });
+
+                ui.heading("Patch Sets");
+                ui.group(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.allocate_ui(
+                            egui::Vec2::new(ui.available_width() * 0.8, ui.available_height()),
+                            |ui| {
+                                egui::ScrollArea::vertical().show(ui, |ui| {
+                                    egui::Grid::new("patch_sets")
+                                        .num_columns(2)
+                                        .spacing([40.0, 4.0])
+                                        .striped(false)
+                                        .show(ui, |ui| {
+                                            ui.label("0/15");
+                                            ui.label("ghoulies_main_patches.json");
+                                            ui.end_row();
+
+                                            ui.label("2/15");
+                                            ui.label("ghoulies_graphics_patches.json");
+                                            ui.end_row();
+                                        });
+                                });
+                            },
+                        );
+
+                        ui.vertical(|ui| {
+                            let button_size = egui::vec2(30.0, 30.0);
+
+                            if ui.add_sized(button_size, egui::Button::new("+")).clicked() {
+                                // TODO: Prompt for patch set
+                            };
+
+                            if ui.add_sized(button_size, egui::Button::new("-")).clicked() {
+                                // TODO: Prompt for patch set
+                            };
+                        });
+                    });
+                });
+            });
         });
     }
 }
