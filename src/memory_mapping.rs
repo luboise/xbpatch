@@ -1,3 +1,5 @@
+use crate::xiso::XBEHeader;
+
 #[derive(Debug)]
 pub struct MemoryMap {
     mappings: Vec<MemoryMapping>,
@@ -11,6 +13,20 @@ pub struct MemoryMapping {
 }
 
 impl MemoryMap {
+    pub fn from_xbe_header(header: &XBEHeader) -> MemoryMap {
+        let mut mappings = Vec::new();
+
+        for section in header.sections() {
+            mappings.push(MemoryMapping {
+                file_start: section.file_offset,
+                virtual_start: section.virtual_offset,
+                size: section.virtual_size,
+            });
+        }
+
+        MemoryMap { mappings }
+    }
+
     pub fn get_raw_offset(&self, address: u32) -> Result<u32, std::io::Error> {
         for mapping in &self.mappings {
             if mapping.virtual_start <= address && address <= mapping.virtual_start + mapping.size {

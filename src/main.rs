@@ -10,7 +10,10 @@ mod xiso;
 
 use walkdir::WalkDir;
 
-use crate::memory_mapping::{MemoryMap, MemoryMapping};
+use crate::{
+    memory_mapping::{MemoryMap, MemoryMapping},
+    xiso::XBEHeader,
+};
 
 #[derive(Debug, Default)]
 struct XBPatchArgs {
@@ -143,24 +146,9 @@ fn main() {
     };
 
     // Parse the config
-
-    // Write the patches
-    // TODO: Generate the memory map from the .xbe file instead of having to manually enter it
-    let mem = MemoryMap::new(vec![
-        MemoryMapping {
-            file_start: 0x0,
-            virtual_start: 0x00010000,
-            size: 0xf60,
-        },
-        MemoryMapping {
-            file_start: 0x1000,
-            virtual_start: 0x00011000,
-            size: 0x160020,
-        },
-    ]);
-
+    //
     let mut xbe_writer =
-        XBEWriter::new(&xbe_path, mem).expect("Unable to create new XBE writer to apply patches.");
+        XBEWriter::new(&xbe_path).expect("Unable to create new XBE writer to apply patches.");
 
     /*
     let patches = vec![GamePatch {
@@ -188,16 +176,17 @@ fn main() {
             replacement_bytes: vec![0xeb, 0x21],
             original_bytes: None,
         },
-        /*
         GamePatch {
-            name: String::from("Uncap frame rate 2"),
-            offset: 0x15493c,
+            name: String::from("Remove Relic store RNG"),
+            offset: 0x81454,
             offset_type: GamePatchOffsetType::Virtual,
-            replacement_bytes: vec![0xc7, 0x42, 0x30, 0x01, 0x00, 0x00, 0x80],
+            replacement_bytes: vec![0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90],
             original_bytes: None,
         },
-        */
     ];
+
+    let mut successes = 0;
+    let mut failures = 0;
 
     patches.iter().for_each(|p| {
         // TODO: Remove these unwraps
@@ -205,12 +194,36 @@ fn main() {
         std::io::stdout().flush().expect("Unable to flush stdout");
 
         match xbe_writer.apply_patch(p) {
-            Ok(_) => println!("DONE!"),
-            Err(_) => println!("FAILED!\n        Failed to apply {}.", &p.name),
+            Ok(_) => {
+                successes += 1;
+                println!("DONE!")
+            }
+            Err(_) => {
+                failures += 1;
+                println!("FAILED!\n        Failed to apply {}.", &p.name);
+            }
         };
     });
 
-    println!("All patches applied successfully.");
+    if failures == 0 {
+        println!("All patches applied successfully.");
+    } else {
+        if successes == 0 {
+            println!("Failed to apply all patches.");
+            println!("Exiting now.");
+            std::process::exit(0);
+        }
+
+        let should_continue = prompt_user_bool(format!(
+            "Failed to apply {} patches. Would you like to write the iso anyway?",
+            failures
+        ));
+
+        if !should_continue {
+            println!("Exiting now.");
+            std::process::exit(0);
+        }
+    }
 
     if let Some(parent_dir) = extraction_dir.parent() {
         let iso_path = parent_dir.join("isoname.iso");
@@ -234,15 +247,33 @@ fn main() {
     println!("Exiting now.");
 }
 
+/*
+   // Write the patches
+   // TODO: Generate the memory map from the .xbe file instead of having to manually enter it
+   let mem = MemoryMap::new(vec![
+       MemoryMapping {
+           file_start: 0x0,
+           virtual_start: 0x00010000,
+           size: 0xf60,
+       },
+       MemoryMapping {
+           file_start: 0x1000,
+           virtual_start: 0x00011000,
+           size: 0x160020,
+       },
+   ]);
+*/
+
 #[derive(Debug)]
 struct XBEWriter {
     xbe_file: File,
+    xbe_header: XBEHeader,
     mem_map: MemoryMap,
 }
 
 impl XBEWriter {
-    pub fn new(path: &PathBuf, mem_map: MemoryMap) -> Result<XBEWriter, std::io::Error> {
-        let xbe = match OpenOptions::new().read(true).write(true).open(&path) {
+    pub fn new(path: &PathBuf) -> Result<XBEWriter, std::io::Error> {
+        let mut xbe_file = match OpenOptions::new().read(true).write(true).open(&path) {
             Ok(f) => f,
             Err(_) => error_exit(format!(
                 "Unable to open file {} for writing.",
@@ -250,9 +281,16 @@ impl XBEWriter {
             )),
         };
 
+        let xbe_header = XBEHeader::from_file(&mut xbe_file)?;
+
+        let mem_map = MemoryMap::from_xbe_header(&xbe_header);
+
+        dbg!(&mem_map);
+
         Ok(XBEWriter {
-            xbe_file: xbe,
+            xbe_file,
             mem_map,
+            xbe_header,
         })
     }
 
@@ -268,6 +306,7 @@ impl XBEWriter {
     }
 }
 
+#[must_use]
 fn prompt_user_bool(msg: String) -> bool {
     print!("{} (y/n): ", msg);
     std::io::stdout().flush().expect("Unable to flush stdout.");
