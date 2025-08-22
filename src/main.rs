@@ -1,13 +1,12 @@
 use std::{
     env,
     fs::{File, OpenOptions},
-    io::{BufRead, BufReader, Read, Seek, SeekFrom, Write},
+    io::{Seek, SeekFrom, Write},
     path::PathBuf,
-    process::{Command, Stdio},
-    time::Duration,
 };
 
 mod memory_mapping;
+mod xiso;
 
 use walkdir::WalkDir;
 
@@ -98,6 +97,9 @@ fn main() {
     if !extraction_dir.exists() {
         std::fs::create_dir_all(&extraction_dir).expect("Unable to create xbpatch dir.");
 
+        xiso::extract_iso(&iso, &extraction_dir);
+
+        /*
         if cfg!(target_os = "windows") {
             todo!();
         } else {
@@ -124,6 +126,7 @@ fn main() {
             extractor.wait().expect("Failed to wait on extract-xiso");
             reader.join().expect("Unable to join reader thread.");
         };
+        */
     }
 
     // Grab default.xbe out of it
@@ -135,7 +138,7 @@ fn main() {
     match backup_file(&xbe_path) {
         Ok(b) => b,
         Err(_) => {
-            error_exit("Unable to blah blah blah");
+            error_exit("Unable to backup default.xbe");
         }
     };
 
@@ -159,6 +162,7 @@ fn main() {
     let mut xbe_writer =
         XBEWriter::new(&xbe_path, mem).expect("Unable to create new XBE writer to apply patches.");
 
+    /*
     let patches = vec![GamePatch {
         name: String::from("Force 1sec cutscenes"),
         offset: 0x4d5ac,
@@ -166,6 +170,34 @@ fn main() {
         replacement_bytes: vec![0x90, 0x90, 0x90, 0x90, 0x90, 0x90],
         original_bytes: Some(vec![0xf3, 0x0f, 0x10, 0x3c, 0x24, 0x08]),
     }];
+
+    let patches = vec![GamePatch {
+        name: String::from("Remove celebration"),
+        offset: 0x2bb36,
+        offset_type: GamePatchOffsetType::Virtual,
+        replacement_bytes: vec![0x90, 0x90, 0x90, 0x90, 0x90, 0x90],
+        original_bytes: None,
+    }];
+    */
+
+    let patches: Vec<GamePatch> = vec![
+        GamePatch {
+            name: String::from("Uncap frame rate 1"),
+            offset: 0x154919,
+            offset_type: GamePatchOffsetType::Virtual,
+            replacement_bytes: vec![0xeb, 0x21],
+            original_bytes: None,
+        },
+        /*
+        GamePatch {
+            name: String::from("Uncap frame rate 2"),
+            offset: 0x15493c,
+            offset_type: GamePatchOffsetType::Virtual,
+            replacement_bytes: vec![0xc7, 0x42, 0x30, 0x01, 0x00, 0x00, 0x80],
+            original_bytes: None,
+        },
+        */
+    ];
 
     patches.iter().for_each(|p| {
         // TODO: Remove these unwraps
@@ -179,6 +211,27 @@ fn main() {
     });
 
     println!("All patches applied successfully.");
+
+    if let Some(parent_dir) = extraction_dir.parent() {
+        let iso_path = parent_dir.join("isoname.iso");
+        println!(
+            "Writing new iso at {}",
+            &iso_path.as_os_str().to_str().unwrap()
+        );
+
+        match xiso::create_iso(&iso_path, &extraction_dir) {
+            Ok(_) => (),
+            Err(e) => error_exit_with_details("Unable to create iso", e.to_string()),
+        };
+        println!(
+            "\nSuccessfully wrote new iso to {}.",
+            &iso_path.to_str().unwrap_or("(Error fetching ISO path)")
+        );
+    } else {
+        error_exit("Unable to get parent dir of iso temp folder.");
+    }
+
+    println!("Exiting now.");
 }
 
 #[derive(Debug)]
@@ -306,6 +359,8 @@ fn backup_file(filepath: &PathBuf) -> Result<PathBuf, std::io::Error> {
         // Do not overwrite if it exists
         // TODO: Make this an option or prompt to the user
         if new_filepath.exists() {
+            println!("Restoring backup default.xbe...");
+            std::fs::copy(&new_filepath, filepath)?;
             return Ok(new_filepath);
         }
 
@@ -317,39 +372,4 @@ fn backup_file(filepath: &PathBuf) -> Result<PathBuf, std::io::Error> {
             "File has no filename",
         ));
     }
-}
-
-fn execute_command(command: &str, args: std::process::CommandArgs) -> Result<(), std::io::Error> {
-    // If the folder doesn't exist (or the user just deleted it), then extract the game
-    if cfg!(target_os = "windows") {
-        todo!();
-    } else {
-        let mut extractor = Command::new(command)
-            .args(args)
-            .stdout(Stdio::piped())
-            .spawn()?;
-        // .expect("Failed to start extract-xiso");
-
-        let estd = extractor.stdout.take().ok_or(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Failed to capture stdout",
-        ))?;
-
-        let command_stdout_reader = BufReader::new(estd);
-
-        let reader = std::thread::spawn(move || {
-            for line in command_stdout_reader.lines() {
-                if let Ok(line) = line {
-                    print!("{}", line);
-                    std::thread::sleep(Duration::from_millis(10));
-                };
-            }
-        });
-        extractor.wait()?;
-        // .expect("Failed to wait on extract-xiso");
-        reader.join();
-        // .expect("Unable to join reader thread.");
-    };
-
-    Ok(())
 }
