@@ -7,6 +7,8 @@ use std::{
     time::Duration,
 };
 
+use walkdir::WalkDir;
+
 #[derive(Debug, Default)]
 struct XBPatchArgs {
     iso_path: Option<PathBuf>,
@@ -26,6 +28,33 @@ enum ArgParseState {
 enum ArgError {
     InvalidArgState,
     IsoSpecifiedMultipleTimes,
+}
+
+impl MemoryMapping {
+    fn contains_block(&self, block_start: usize, block_size: usize) -> bool {
+        block_start < self.size && (self.size - block_start - block_size) < self.size
+    }
+}
+
+#[derive(Debug)]
+struct MemoryMapping {
+    live_offset: u32,
+    size: usize,
+    file_offset: u32,
+}
+
+#[derive(Debug)]
+struct GamePatch {
+    name: String,
+    patch_offset: u32,
+    replacement_bytes: Vec<u8>,
+    original_bytes: Option<Vec<u8>>,
+}
+
+#[derive(Debug)]
+struct XBPatchConfig {
+    mem_mappings: Vec<MemoryMapping>,
+    patches: Vec<GamePatch>,
 }
 
 // Usage
@@ -78,7 +107,7 @@ fn main() {
                 .arg("-x")
                 .arg(&iso)
                 .arg("-d")
-                .arg(extraction_dir)
+                .arg(&extraction_dir)
                 .stdout(Stdio::piped())
                 .spawn()
                 .expect("Failed to start extract-xiso");
@@ -100,6 +129,10 @@ fn main() {
     }
 
     // Grab default.xbe out of it
+    let xbe = match find_file_in_folder("default.xbe".into(), PathBuf::from(&extraction_dir)) {
+        Some(x) => x,
+        None => error_exit("Unable to find default.xbe in the .iso files."),
+    }
 
     // Parse the config
 }
@@ -169,4 +202,16 @@ fn error_exit(message: impl AsRef<str>) -> ! {
     eprintln!("Unable to continue.");
     eprint!("Error: {}", message.as_ref());
     std::process::exit(1);
+}
+
+fn find_file_in_folder(file: PathBuf, folder: PathBuf) -> Option<PathBuf> {
+    for entry in WalkDir::new(folder) {
+        if let Ok(entry) = entry {
+            if entry.path().file_name() == file.file_name() {
+                return Some(entry.path().into());
+            }
+        }
+    }
+
+    None
 }
