@@ -3,7 +3,7 @@
 
 use std::{env, path::PathBuf};
 
-use eframe::egui::{self, Color32, Id, Modal, TextEdit};
+use eframe::egui::{self, Color32, Id, Modal, TextEdit, warn_if_debug_build};
 
 use crate::file_handling::LoadedPatchSet;
 
@@ -277,23 +277,21 @@ impl eframe::App for XBPatchApp {
                             .auto_shrink(false)
                             .show(ui, |ui| {
                                 egui::Grid::new("patches_viewer")
-                                    .num_columns(2)
-                                    .spacing([40.0, 4.0])
+                                    .num_columns(1)
+                                    .spacing([10.0, 4.0])
                                     .striped(false)
                                     .show(ui, |ui| {
                                         let len = mut_lps.enabled_entries_mut().len();
 
                                         for i in 0..len {
-                                            let mut_bool = &mut mut_lps.enabled_entries_mut()[i];
-                                            ui.checkbox(mut_bool, format!("patch_checkbox_{}", i));
+                                            if let Some(patch_entry) = mut_lps.get_patch_entry(i) {
+                                                let mut_bool =
+                                                    &mut mut_lps.enabled_entries_mut()[i];
+                                                ui.checkbox(mut_bool, patch_entry.name())
+                                                    .on_hover_text(patch_entry.description());
 
-                                            let patch_entry_name = mut_lps
-                                                .get_patch_entry(i)
-                                                .map(|v| v.name().clone())
-                                                .unwrap_or_else(|| {
-                                                    "Error fetching name".to_string()
-                                                });
-                                            ui.label(patch_entry_name);
+                                                ui.end_row();
+                                            }
                                         }
                                     });
                             });
@@ -359,7 +357,9 @@ impl eframe::App for XBPatchApp {
 
                                     let label_text = format!("0/{}", patch_set.len());
                                     ui.label(label_text);
-                                    ui.label(&patch_set.name);
+                                    if ui.label(&patch_set.name).clicked() {
+                                        self.current_patch_set = i as u32;
+                                    };
                                     ui.end_row();
                                 }
                             });

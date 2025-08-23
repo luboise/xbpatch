@@ -1,4 +1,4 @@
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 pub mod serialization;
 
@@ -64,6 +64,10 @@ impl PatchEntry {
 
     pub fn name(&self) -> &String {
         &self.name
+    }
+
+    pub fn description(&self) -> &str {
+        &self.description
     }
 }
 

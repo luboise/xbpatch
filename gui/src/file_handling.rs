@@ -7,7 +7,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use xbpatch_core::patching::PatchEntry;
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct PatchSet {
     pub xbpatchset_schema: u32,
     pub name: String,
@@ -32,8 +32,8 @@ pub struct LoadedPatchSet {
 }
 
 impl LoadedPatchSet {
-    pub fn get_patch_entry(&mut self, index: usize) -> Option<&PatchEntry> {
-        self.patch_set.entries.get(index)
+    pub fn get_patch_entry(&self, index: usize) -> Option<PatchEntry> {
+        self.patch_set.entries.get(index).cloned()
     }
 
     pub fn enabled_entries(&self) -> &Vec<bool> {
@@ -50,7 +50,7 @@ impl LoadedPatchSet {
 
         Ok(LoadedPatchSet {
             file,
-            enabled_entries: Vec::with_capacity(patch_set.len()),
+            enabled_entries: vec![false; patch_set.len()],
             patch_set,
         })
     }
@@ -66,8 +66,8 @@ impl LoadedPatchSet {
 
         Ok(LoadedPatchSet {
             file,
+            enabled_entries: vec![false; patch_set.len()],
             patch_set,
-            enabled_entries: Vec::new(),
         })
     }
 
