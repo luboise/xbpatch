@@ -1,6 +1,9 @@
 use eframe::egui::{Color32, Context, Id, Modal};
 
-pub fn ask_user(ctx: &Context, id: &str, message: &String) -> Option<bool> {
+pub fn ask_user<F>(ctx: &Context, id: &str, message: &String, on_answer: F)
+where
+    F: FnOnce(bool),
+{
     Modal::new(Id::new(id))
         .backdrop_color(Color32::from_black_alpha(100))
         .show(ctx, |ui| {
@@ -8,14 +11,10 @@ pub fn ask_user(ctx: &Context, id: &str, message: &String) -> Option<bool> {
 
             ui.horizontal(|ui| {
                 if ui.button("OK").clicked() {
-                    return Some(true);
+                    on_answer(true);
                 } else if ui.button("Cancel").clicked() {
-                    return Some(false);
-                } else {
-                    return None;
+                    on_answer(false);
                 }
             });
         });
-
-    None
 }

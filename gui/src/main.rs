@@ -74,6 +74,11 @@ impl Default for XBPatchApp {
 
 impl XBPatchApp {
     pub fn current_patch_set(&self) -> Option<&LoadedPatchSet> {
+        let i = self.current_patch_set as usize;
+
+        if i < self.loaded_patches.len() {
+            return Some(&self.loaded_patches[i]);
+        }
         None
     }
     pub fn reload_patch_sets(&mut self) -> Result<(), std::io::Error> {
@@ -157,31 +162,28 @@ impl eframe::App for XBPatchApp {
                             if ui.button("OK").clicked() {
                                 println!("User entered new patch set: {}", &self.modal_input);
 
-                                match &self.patch_sets_path {
-                                    Some(p) => {
-                                        let new_path = p.join("name.json");
+                                if let Some(p) = &self.patch_sets_path {
+                                    let new_path = p.join("name.json");
 
-                                        match LoadedPatchSet::create_new(
-                                            self.modal_input.clone(),
-                                            &new_path,
-                                        ) {
-                                            Ok(_) => {
-                                                match self.reload_patch_sets() {
-                                                    Ok(_) => (),
-                                                    Err(_) => {
-                                                        eprintln!("Unable to reload patch sets.")
-                                                    }
-                                                };
-                                            }
-                                            Err(_) => {
-                                                eprintln!(
-                                                    "Unable to create new patch set at {}",
-                                                    new_path.display()
-                                                );
-                                            }
-                                        };
-                                    }
-                                    None => todo!(),
+                                    match LoadedPatchSet::create_new(
+                                        self.modal_input.clone(),
+                                        &new_path,
+                                    ) {
+                                        Ok(_) => {
+                                            match self.reload_patch_sets() {
+                                                Ok(_) => (),
+                                                Err(_) => {
+                                                    eprintln!("Unable to reload patch sets.")
+                                                }
+                                            };
+                                        }
+                                        Err(_) => {
+                                            eprintln!(
+                                                "Unable to create new patch set at {}",
+                                                new_path.display()
+                                            );
+                                        }
+                                    };
                                 };
 
                                 self.status = XBPatchAppStatus::Normal;
@@ -193,41 +195,37 @@ impl eframe::App for XBPatchApp {
                         });
                     });
             }
-            XBPatchAppStatus::DeletionPrompt => match self.current_patch_set() {
-                Some(cps) => {
-                    let path: &PathBuf = cps.path();
-
+            XBPatchAppStatus::DeletionPrompt => {
+                if let Some(cps) = self.current_patch_set() {
                     let text = format!(
                         "Are you sure that you would like to delete patch set {}\n{}",
                         cps.data().name,
                         cps.path().display()
                     );
 
-                    match modals::ask_user(ctx, "PatchSet Deletion", &text) {
-                        Some(b) => {
-                            if b {
-                                match std::fs::remove_file(path) {
-                                    Ok(_) => {
-                                        println!("Successfully deleted {}", &path.display());
-                                        self.status = XBPatchAppStatus::NeedReload;
-                                        self.current_patch_set = 0;
-                                    }
-                                    Err(_) => {
-                                        eprintln!("Unable to delete {}", path.display());
-                                    }
-                                };
-                            }
+                    let path = cps.path().clone();
 
-                            self.status = XBPatchAppStatus::Normal;
+                    modals::ask_user(ctx, "PatchSet Deletion", &text, |b| {
+                        if b {
+                            println!("Attempting to delete {}", path.display());
+                            match std::fs::remove_file(&path) {
+                                Ok(_) => {
+                                    println!("Successfully deleted {}", &path.display());
+                                    self.current_patch_set = 0;
+                                }
+                                Err(_) => {
+                                    eprintln!("Unable to delete {}", path.display());
+                                }
+                            };
                         }
-                        None => todo!(),
-                    };
+
+                        self.status = XBPatchAppStatus::NeedReload;
+                    });
                 }
-                None => {
-                    eprintln!("In deletion prompt state but no patch set is currently selected.");
-                    self.status = XBPatchAppStatus::Normal;
-                }
-            },
+
+                // eprintln!("In deletion prompt state but no patch set is currently selected.");
+                // self.status = XBPatchAppStatus::Normal;
+            }
         };
 
         egui::CentralPanel::default().show(ctx, |ui| {
