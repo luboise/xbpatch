@@ -93,79 +93,7 @@ impl Default for XBPatchApp {
 }
 
 impl XBPatchApp {
-    pub fn has_current_patch_set(&self) -> bool {
-        self.current_loaded_patch_set().is_some()
-    }
-
-    pub fn current_loaded_patch_set(&self) -> Option<&LoadedPatchSet> {
-        let i = self.current_patch_set as usize;
-
-        if i < self.loaded_patches.len() {
-            return Some(&self.loaded_patches[i]);
-        }
-
-        None
-    }
-
-    pub fn current_loaded_patch_set_mut(&mut self) -> Option<&mut LoadedPatchSet> {
-        let i = self.current_patch_set as usize;
-
-        if i < self.loaded_patches.len() {
-            return Some(&mut self.loaded_patches[i]);
-        }
-
-        None
-    }
-
-    pub fn reload_patch_sets(&mut self) -> Result<(), std::io::Error> {
-        match &self.patch_sets_path {
-            Some(p) => {
-                if !p.exists() {
-                    std::fs::create_dir_all(p)?;
-                    return Ok(());
-                }
-
-                self.loaded_patches.clear();
-
-                for entry in walkdir::WalkDir::new(p)
-                    .into_iter()
-                    .filter_map(Result::ok)
-                    .filter(|e| e.path().is_file())
-                {
-                    if entry.path().is_dir() {
-                        continue;
-                    }
-
-                    let path_buf: PathBuf = entry.path().into();
-
-                    println!("Importing PatchSet from {}", path_buf.display());
-
-                    let new_lps = match LoadedPatchSet::existing(&path_buf) {
-                        Ok(l) => l,
-                        Err(e) => {
-                            println!(
-                                "Unable to load PatchSet from {}\nDetails: {}",
-                                path_buf.display(),
-                                e
-                            );
-                            continue;
-                        }
-                    };
-
-                    self.loaded_patches.push(new_lps);
-                }
-            }
-            None => {
-                eprintln!("Unable to reload patch sets when one hasn't been chosen.");
-            }
-        };
-
-        Ok(())
-    }
-}
-
-impl eframe::App for XBPatchApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    pub fn update_state(&mut self, ctx: &egui::Context) {
         match self.status {
             XBPatchAppStatus::Startup => {
                 println!(
@@ -299,6 +227,82 @@ impl eframe::App for XBPatchApp {
                 self.status = XBPatchAppStatus::Normal;
             }
         };
+    }
+
+    pub fn has_current_patch_set(&self) -> bool {
+        self.current_loaded_patch_set().is_some()
+    }
+
+    pub fn current_loaded_patch_set(&self) -> Option<&LoadedPatchSet> {
+        let i = self.current_patch_set as usize;
+
+        if i < self.loaded_patches.len() {
+            return Some(&self.loaded_patches[i]);
+        }
+
+        None
+    }
+
+    pub fn current_loaded_patch_set_mut(&mut self) -> Option<&mut LoadedPatchSet> {
+        let i = self.current_patch_set as usize;
+
+        if i < self.loaded_patches.len() {
+            return Some(&mut self.loaded_patches[i]);
+        }
+
+        None
+    }
+
+    pub fn reload_patch_sets(&mut self) -> Result<(), std::io::Error> {
+        match &self.patch_sets_path {
+            Some(p) => {
+                if !p.exists() {
+                    std::fs::create_dir_all(p)?;
+                    return Ok(());
+                }
+
+                self.loaded_patches.clear();
+
+                for entry in walkdir::WalkDir::new(p)
+                    .into_iter()
+                    .filter_map(Result::ok)
+                    .filter(|e| e.path().is_file())
+                {
+                    if entry.path().is_dir() {
+                        continue;
+                    }
+
+                    let path_buf: PathBuf = entry.path().into();
+
+                    println!("Importing PatchSet from {}", path_buf.display());
+
+                    let new_lps = match LoadedPatchSet::existing(&path_buf) {
+                        Ok(l) => l,
+                        Err(e) => {
+                            println!(
+                                "Unable to load PatchSet from {}\nDetails: {}",
+                                path_buf.display(),
+                                e
+                            );
+                            continue;
+                        }
+                    };
+
+                    self.loaded_patches.push(new_lps);
+                }
+            }
+            None => {
+                eprintln!("Unable to reload patch sets when one hasn't been chosen.");
+            }
+        };
+
+        Ok(())
+    }
+}
+
+impl eframe::App for XBPatchApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.update_state(&ctx);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             let width = ui.available_width();
@@ -307,7 +311,7 @@ impl eframe::App for XBPatchApp {
                 ui.heading(format!("XBPatch v{}", env!("CARGO_PKG_VERSION")));
             });
 
-            egui::SidePanel::right("scroll_test")
+            egui::SidePanel::right("patching_panel")
                 .max_width(0.45 * width)
                 .show_inside(ui, |ui| {
                     if let Some(mut_lps) = self.current_loaded_patch_set_mut() {
@@ -349,6 +353,96 @@ impl eframe::App for XBPatchApp {
                     } else {
                         ui.heading("Current patch set is unavailable.");
                     }
+                });
+
+            egui::SidePanel::right("patch_sets_panel")
+                .max_width(0.45 * width)
+                .show_inside(ui, |ui| {
+                    ui.heading("Patch Sets");
+
+                    egui::ScrollArea::vertical()
+                        .auto_shrink(true)
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                egui::Grid::new("patch_sets")
+                                    .num_columns(2)
+                                    .spacing([40.0, 4.0])
+                                    .striped(false)
+                                    .show(ui, |ui| {
+                                        for (i, lps) in self.loaded_patches.iter().enumerate() {
+                                            let patch_set = lps.data();
+
+                                            // TODO: Implement highlight when mouse hovering
+
+                                            if i as u32 == self.current_patch_set {
+                                                let row_dims: egui::Rect =
+                                                    ui.available_rect_before_wrap();
+                                                ui.painter().rect_filled(
+                                                    row_dims,
+                                                    0.0,
+                                                    ui.visuals().selection.bg_fill,
+                                                );
+                                            }
+
+                                            let label_text = format!(
+                                                "{}/{}",
+                                                lps.enabled_entries()
+                                                    .iter()
+                                                    .filter(|v| { **v })
+                                                    .count(),
+                                                patch_set.len()
+                                            );
+                                            ui.label(label_text);
+                                            if ui.label(&patch_set.name).clicked() {
+                                                self.current_patch_set = i as u32;
+                                            };
+                                            ui.end_row();
+                                        }
+                                    });
+
+                                ui.group(|ui| {
+                                    ui.vertical(|ui| {
+                                let button_size = egui::vec2(30.0, 30.0);
+
+                                if ui
+                                    .add_sized(button_size, egui::Button::new("+"))
+                                    .on_hover_text("Create new patch set.")
+                                    .clicked()
+                                {
+                                    if self.status == XBPatchAppStatus::Normal {
+                                        self.modal_input.clear();
+                                        self.status = XBPatchAppStatus::GettingNewPatchSetName;
+                                    }
+                                };
+
+                                if ui.add_sized(button_size, egui::Button::new("-"))
+                                    .on_hover_text("Delete selected patch set.")
+                                    .clicked() {
+                                    if self.status == XBPatchAppStatus::Normal {
+                                        match self.current_loaded_patch_set() {
+                                            Some(cps) => {
+                                                self.status = XBPatchAppStatus::DeletionPrompt
+                                            }
+                                            None => {
+                                                eprintln!(
+                                        "Unable to delete when no patch set has been selected."
+                                    );
+                                            }
+                                        };
+                                    }
+                                };
+
+                                if ui.add_sized(button_size, egui::Button::new("⟳"))
+                                    .on_hover_text("Refresh patches.")
+                                    .clicked() {
+                                    if self.status == XBPatchAppStatus::Normal {
+                                        self.status = XBPatchAppStatus::NeedReload;
+                                    }
+                                };
+                            });
+                                })
+                            });
+                        });
                 });
 
             ui.horizontal(|ui| {
@@ -415,89 +509,6 @@ impl eframe::App for XBPatchApp {
 
                 ui.colored_label(color, text);
             });
-
-            ui.heading("Patch Sets");
-
-            egui::ScrollArea::vertical()
-                .auto_shrink(true)
-                .show(ui, |ui| {
-                    // TODO: Make this actually color properly
-                    let color_width = ui.available_width() * 0.16;
-
-                    ui.horizontal(|ui| {
-                        egui::Grid::new("patch_sets")
-                            .num_columns(2)
-                            .spacing([40.0, 4.0])
-                            .striped(false)
-                            .show(ui, |ui| {
-                                for (i, lps) in self.loaded_patches.iter().enumerate() {
-                                    let patch_set = lps.data();
-
-                                    // TODO: Implement highlight when mouse hovering
-
-                                    if i as u32 == self.current_patch_set {
-                                        let mut row_dims: egui::Rect =
-                                            ui.available_rect_before_wrap();
-                                        row_dims.set_right(color_width);
-                                        ui.painter().rect_filled(
-                                            row_dims,
-                                            0.0,
-                                            ui.visuals().selection.bg_fill,
-                                        );
-                                    }
-
-                                    let label_text = format!("0/{}", patch_set.len());
-                                    ui.label(label_text);
-                                    if ui.label(&patch_set.name).clicked() {
-                                        self.current_patch_set = i as u32;
-                                    };
-                                    ui.end_row();
-                                }
-                            });
-
-                        ui.group(|ui| {
-                            ui.vertical(|ui| {
-                                let button_size = egui::vec2(30.0, 30.0);
-
-                                if ui
-                                    .add_sized(button_size, egui::Button::new("+"))
-                                    .on_hover_text("Create new patch set.")
-                                    .clicked()
-                                {
-                                    if self.status == XBPatchAppStatus::Normal {
-                                        self.modal_input.clear();
-                                        self.status = XBPatchAppStatus::GettingNewPatchSetName;
-                                    }
-                                };
-
-                                if ui.add_sized(button_size, egui::Button::new("-"))
-                                    .on_hover_text("Delete selected patch set.")
-                                    .clicked() {
-                                    if self.status == XBPatchAppStatus::Normal {
-                                        match self.current_loaded_patch_set() {
-                                            Some(cps) => {
-                                                self.status = XBPatchAppStatus::DeletionPrompt
-                                            }
-                                            None => {
-                                                eprintln!(
-                                        "Unable to delete when no patch set has been selected."
-                                    );
-                                            }
-                                        };
-                                    }
-                                };
-
-                                if ui.add_sized(button_size, egui::Button::new("⟳"))
-                                    .on_hover_text("Refresh patches.")
-                                    .clicked() {
-                                    if self.status == XBPatchAppStatus::Normal {
-                                        self.status = XBPatchAppStatus::NeedReload;
-                                    }
-                                };
-                            });
-                        })
-                    });
-                });
         });
     }
 }
