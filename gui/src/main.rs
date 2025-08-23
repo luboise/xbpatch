@@ -293,20 +293,36 @@ impl eframe::App for XBPatchApp {
             egui::ScrollArea::vertical()
                 .auto_shrink(true)
                 .show(ui, |ui| {
+                    // TODO: Make this actually color properly
+                    let color_width = ui.available_width() * 0.16;
+
                     ui.horizontal(|ui| {
                         egui::Grid::new("patch_sets")
                             .num_columns(2)
                             .spacing([40.0, 4.0])
                             .striped(false)
                             .show(ui, |ui| {
-                                self.loaded_patches.iter().for_each(|lps| {
+                                for (i, lps) in self.loaded_patches.iter().enumerate() {
                                     let patch_set = lps.data();
+
+                                    // TODO: Implement highlight when mouse hovering
+
+                                    if i as u32 == self.current_patch_set {
+                                        let mut row_dims: egui::Rect =
+                                            ui.available_rect_before_wrap();
+                                        row_dims.set_right(color_width);
+                                        ui.painter().rect_filled(
+                                            row_dims,
+                                            0.0,
+                                            ui.visuals().selection.bg_fill,
+                                        );
+                                    }
 
                                     let label_text = format!("0/{}", patch_set.len());
                                     ui.label(label_text);
                                     ui.label(&patch_set.name);
                                     ui.end_row();
-                                });
+                                }
                             });
 
                         ui.group(|ui| {
@@ -325,8 +341,6 @@ impl eframe::App for XBPatchApp {
                                 };
 
                                 if ui.add_sized(button_size, egui::Button::new("-"))
-
-
                                     .on_hover_text("Delete selected patch set.")
                                     .clicked() {
                                     if self.status == XBPatchAppStatus::Normal {
@@ -340,6 +354,14 @@ impl eframe::App for XBPatchApp {
                                     );
                                             }
                                         };
+                                    }
+                                };
+
+                                if ui.add_sized(button_size, egui::Button::new("⟳"))
+                                    .on_hover_text("Refresh patches.")
+                                    .clicked() {
+                                    if self.status == XBPatchAppStatus::Normal {
+                                        self.status = XBPatchAppStatus::NeedReload;
                                     }
                                 };
                             });
