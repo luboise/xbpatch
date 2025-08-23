@@ -302,7 +302,7 @@ impl XBPatchApp {
 
 impl eframe::App for XBPatchApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.update_state(&ctx);
+        self.update_state(ctx);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             let width = ui.available_width();
