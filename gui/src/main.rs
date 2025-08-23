@@ -221,10 +221,12 @@ impl eframe::App for XBPatchApp {
 
                         self.status = XBPatchAppStatus::NeedReload;
                     });
+                } else {
+                    eprintln!(
+                        "In deletion prompt state but no patch set is currently selected. Returning to normal state."
+                    );
+                    self.status = XBPatchAppStatus::Normal;
                 }
-
-                // eprintln!("In deletion prompt state but no patch set is currently selected.");
-                // self.status = XBPatchAppStatus::Normal;
             }
         };
 
