@@ -1,9 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
-use std::{env, path::PathBuf};
+use std::{env, path::PathBuf, process::id};
 
-use eframe::egui;
+use eframe::{
+    Frame,
+    egui::{self, Color32, Id, Modal, TextEdit},
+};
 
 use crate::file_handling::LoadedPatchSet;
 
@@ -29,9 +32,11 @@ enum ISOStatus {
     Invalid,
 }
 
+#[derive(PartialEq)]
 enum XBPatchAppStatus {
     Startup,
     Normal,
+    GettingNewPatchSetName,
 }
 
 struct XBPatchApp {
@@ -41,6 +46,8 @@ struct XBPatchApp {
     patch_sets_path: Option<PathBuf>,
     loaded_patches: Vec<LoadedPatchSet>,
     current_patch_set: u32,
+
+    modal_input: String,
 }
 
 impl Default for XBPatchApp {
@@ -61,6 +68,7 @@ impl Default for XBPatchApp {
             patch_sets_path,
             loaded_patches: Vec::new(),
             current_patch_set: 0,
+            modal_input: String::new(),
         }
     }
 }
@@ -84,7 +92,7 @@ impl XBPatchApp {
 
                     println!("Importing PatchSet from {}", path_buf.display());
 
-                    let new_lps = match LoadedPatchSet::new(&path_buf) {
+                    let new_lps = match LoadedPatchSet::existing(&path_buf) {
                         Ok(l) => l,
                         Err(e) => {
                             println!(
@@ -127,6 +135,53 @@ impl eframe::App for XBPatchApp {
                 self.status = XBPatchAppStatus::Normal
             }
             XBPatchAppStatus::Normal => {}
+            XBPatchAppStatus::GettingNewPatchSetName => {
+                Modal::new(Id::new("Getting New Patch Set Name"))
+                    .backdrop_color(Color32::from_black_alpha(100))
+                    .show(ctx, |ui| {
+                        ui.label("Please enter a name for the new patch set:");
+                        ui.add(TextEdit::singleline(&mut self.modal_input));
+
+                        ui.horizontal(|ui| {
+                            if ui.button("OK").clicked() {
+                                println!("User entered new patch set: {}", &self.modal_input);
+
+                                match &self.patch_sets_path {
+                                    Some(p) => {
+                                        let new_path = p.join("name.json");
+
+                                        match LoadedPatchSet::create_new(
+                                            self.modal_input.clone(),
+                                            &new_path,
+                                        ) {
+                                            Ok(_) => {
+                                                match self.reload_patch_sets() {
+                                                    Ok(_) => (),
+                                                    Err(_) => {
+                                                        eprintln!("Unable to reload patch sets.")
+                                                    }
+                                                };
+                                            }
+                                            Err(_) => {
+                                                eprintln!(
+                                                    "Unable to create new patch set at {}",
+                                                    new_path.display()
+                                                );
+                                            }
+                                        };
+                                    }
+                                    None => todo!(),
+                                };
+
+                                self.status = XBPatchAppStatus::Normal;
+                            }
+                            if ui.button("Cancel").clicked() {
+                                self.status = XBPatchAppStatus::Normal;
+                                self.modal_input.clear();
+                            }
+                        });
+                    });
+            }
         };
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -212,7 +267,10 @@ impl eframe::App for XBPatchApp {
                             let button_size = egui::vec2(30.0, 30.0);
 
                             if ui.add_sized(button_size, egui::Button::new("+")).clicked() {
-                                // TODO: Prompt for patch set
+                                if self.status == XBPatchAppStatus::Normal {
+                                    self.status = XBPatchAppStatus::GettingNewPatchSetName;
+                                    self.modal_input.clear();
+                                }
                             };
 
                             if ui.add_sized(button_size, egui::Button::new("-")).clicked() {

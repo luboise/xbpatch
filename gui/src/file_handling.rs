@@ -7,7 +7,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use xbpatch_core::patching::PatchEntry;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 pub struct PatchSet {
     pub xbpatchset_schema: u32,
     pub name: String,
@@ -32,9 +32,25 @@ pub struct LoadedPatchSet {
 }
 
 impl LoadedPatchSet {
-    pub fn new(path: &PathBuf) -> Result<Self, std::io::Error> {
+    pub fn existing(path: &PathBuf) -> Result<Self, std::io::Error> {
         let file = LiveFile::<PatchSet>::from_existing(path)?;
         let patch_set: PatchSet = file.data().clone();
+
+        Ok(LoadedPatchSet {
+            file,
+            patch_set,
+            enabled_entries: Vec::new(),
+        })
+    }
+
+    pub fn create_new(name: String, path: &PathBuf) -> Result<Self, std::io::Error> {
+        let mut file = LiveFile::<PatchSet>::from_new(path, PatchSet::default())?;
+
+        file.update(|ps| {
+            ps.name = name;
+        })?;
+
+        let patch_set = file.data().clone();
 
         Ok(LoadedPatchSet {
             file,
@@ -66,7 +82,12 @@ where
     T: Serialize + for<'de> Deserialize<'de>,
 {
     pub fn from_new(path: &PathBuf, data: T) -> Result<Self, std::io::Error> {
-        let file = OpenOptions::new().read(true).write(true).open(&path)?;
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .read(true)
+            .write(true)
+            .open(path)?;
 
         let mut backup_path = path.clone();
         backup_path.set_extension("json.bak");
@@ -80,7 +101,7 @@ where
     }
 
     pub fn from_existing(path: &PathBuf) -> Result<Self, std::io::Error> {
-        let file = OpenOptions::new().read(true).write(true).open(&path)?;
+        let file = OpenOptions::new().read(true).write(true).open(path)?;
 
         let data: T = serde_json::from_reader(&file)?;
 
