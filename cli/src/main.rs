@@ -1,19 +1,13 @@
-use std::{
-    env,
-    fs::{File, OpenOptions},
-    io::{Seek, SeekFrom, Write},
-    path::PathBuf,
+use std::{env, io::Write, path::PathBuf};
+
+use xbpatch_core::{
+    patching::{Patch, PatchEntry, PatchOffsetType},
+    xbe::{PatchReport, XBEWriter},
 };
 
-mod memory_mapping;
-mod xiso;
+mod commands;
 
 use walkdir::WalkDir;
-
-use crate::{
-    memory_mapping::{MemoryMap, MemoryMapping},
-    xiso::XBEHeader,
-};
 
 #[derive(Debug, Default)]
 struct XBPatchArgs {
@@ -34,27 +28,6 @@ enum ArgParseState {
 enum ArgError {
     InvalidArgState,
     IsoSpecifiedMultipleTimes,
-}
-
-#[derive(Debug)]
-enum GamePatchOffsetType {
-    Raw,
-    Virtual,
-}
-
-#[derive(Debug)]
-struct GamePatch {
-    name: String,
-    offset: u32,
-    offset_type: GamePatchOffsetType,
-    replacement_bytes: Vec<u8>,
-    original_bytes: Option<Vec<u8>>,
-}
-
-#[derive(Debug)]
-struct XBPatchConfig {
-    mem_mappings: Vec<MemoryMapping>,
-    patches: Vec<GamePatch>,
 }
 
 // Usage
@@ -100,7 +73,7 @@ fn main() {
     if !extraction_dir.exists() {
         std::fs::create_dir_all(&extraction_dir).expect("Unable to create xbpatch dir.");
 
-        xiso::extract_iso(&iso, &extraction_dir);
+        commands::extract_iso(&iso, &extraction_dir);
     }
 
     // Grab default.xbe out of it
@@ -117,51 +90,61 @@ fn main() {
     };
 
     // Parse the config
-    //
-    let mut xbe_writer =
-        XBEWriter::new(&xbe_path).expect("Unable to create new XBE writer to apply patches.");
+    let mut xbe_writer = match XBEWriter::new(&xbe_path) {
+        Ok(w) => w,
+        Err(_) => error_exit(format!(
+            "Unable to open file {} for writing.",
+            &xbe_path.to_str().unwrap()
+        )),
+    };
 
-    let patches: Vec<GamePatch> = vec![
-        GamePatch {
-            name: String::from("Uncap frame rate 1"),
-            offset: 0x154919,
-            offset_type: GamePatchOffsetType::Virtual,
-            replacement_bytes: vec![0xeb, 0x21],
-            original_bytes: None,
-        },
-        GamePatch {
-            name: String::from("Remove Relic store RNG"),
-            offset: 0x81454,
-            offset_type: GamePatchOffsetType::Virtual,
-            replacement_bytes: vec![0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90],
-            original_bytes: None,
-        },
-    ];
+    let mut patch_entries = Vec::new();
+    patch_entries.push(PatchEntry::new(
+        String::from("Uncap frame rate"),
+        String::from("Uncaps the frame rate"),
+        None,
+        vec![
+            Patch {
+                offset: 0x154919,
+                offset_type: PatchOffsetType::Virtual,
+                replacement_bytes: vec![0xeb, 0x21],
+                original_bytes: None,
+            },
+            Patch {
+                offset: 0x81454,
+                offset_type: PatchOffsetType::Virtual,
+                replacement_bytes: vec![0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90],
+                original_bytes: None,
+            },
+        ],
+    ));
 
-    let mut successes = 0;
-    let mut failures = 0;
+    let mut report = PatchReport::default();
 
-    patches.iter().for_each(|p| {
-        // TODO: Remove these unwraps
-        print!("Applying patch \"{}\"...  ", &p.name);
-        std::io::stdout().flush().expect("Unable to flush stdout");
+    for entry in patch_entries {
+        print!("Applying patch \"{}\"...  ", entry.name());
 
-        match xbe_writer.apply_patch(p) {
-            Ok(_) => {
-                successes += 1;
-                println!("DONE!")
+        match xbe_writer.apply_patches(&entry) {
+            Ok(patch_report) => {
+                if patch_report.patch_successful() {
+                    report.add_success();
+
+                    println!("DONE!");
+                } else {
+                    report.add_failure();
+                    println!("FAILED!\n        Failed to apply {}.", entry.name());
+                }
             }
-            Err(_) => {
-                failures += 1;
-                println!("FAILED!\n        Failed to apply {}.", &p.name);
+            Err(e) => {
+                error_exit("CRITICAL FAILURE!");
             }
-        };
-    });
+        }
+    }
 
-    if failures == 0 {
+    if report.failures() == 0 {
         println!("All patches applied successfully.");
     } else {
-        if successes == 0 {
+        if report.successes() == 0 {
             println!("Failed to apply all patches.");
             println!("Exiting now.");
             std::process::exit(0);
@@ -169,7 +152,7 @@ fn main() {
 
         let should_continue = prompt_user_bool(format!(
             "Failed to apply {} patches. Would you like to write the iso anyway?",
-            failures
+            report.failures()
         ));
 
         if !should_continue {
@@ -185,7 +168,7 @@ fn main() {
             &iso_path.as_os_str().to_str().unwrap()
         );
 
-        match xiso::create_iso(&iso_path, &extraction_dir) {
+        match commands::create_iso(&iso_path, &extraction_dir) {
             Ok(_) => (),
             Err(e) => error_exit_with_details("Unable to create iso", e.to_string()),
         };
@@ -216,48 +199,6 @@ fn main() {
        },
    ]);
 */
-
-#[derive(Debug)]
-struct XBEWriter {
-    xbe_file: File,
-    xbe_header: XBEHeader,
-    mem_map: MemoryMap,
-}
-
-impl XBEWriter {
-    pub fn new(path: &PathBuf) -> Result<XBEWriter, std::io::Error> {
-        let mut xbe_file = match OpenOptions::new().read(true).write(true).open(&path) {
-            Ok(f) => f,
-            Err(_) => error_exit(format!(
-                "Unable to open file {} for writing.",
-                path.to_str().unwrap()
-            )),
-        };
-
-        let xbe_header = XBEHeader::from_file(&mut xbe_file)?;
-
-        let mem_map = MemoryMap::from_xbe_header(&xbe_header);
-
-        dbg!(&mem_map);
-
-        Ok(XBEWriter {
-            xbe_file,
-            mem_map,
-            xbe_header,
-        })
-    }
-
-    pub fn apply_patch(&mut self, patch: &GamePatch) -> Result<(), std::io::Error> {
-        let offset: u64 = match patch.offset_type {
-            GamePatchOffsetType::Raw => patch.offset.into(),
-            GamePatchOffsetType::Virtual => self.mem_map.get_raw_offset(patch.offset)?.into(),
-        };
-
-        self.xbe_file.seek(SeekFrom::Start(offset))?;
-        self.xbe_file.write_all(patch.replacement_bytes.as_ref())?;
-        Ok(())
-    }
-}
 
 #[must_use]
 fn prompt_user_bool(msg: String) -> bool {

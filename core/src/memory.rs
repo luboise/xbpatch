@@ -1,4 +1,4 @@
-use crate::xiso::XBEHeader;
+use crate::xbe::XBEHeader;
 
 #[derive(Debug)]
 pub struct MemoryMap {
@@ -52,17 +52,17 @@ impl MemoryMapping {
 
 #[cfg(test)]
 mod tests {
-    use crate::memory_mapping::{MemoryMap, MemoryMapping};
+    use crate::memory::{MemoryMap, MemoryMapping};
 
     #[test]
     fn get_raw_address_tests() -> Result<(), String> {
-        let mem = get_mem_map();
+        let mem = get_test_mem_map();
 
         assert_eq!(mem.get_raw_offset(0x4d5ac).unwrap(), 0x3d5ac);
         Ok(())
     }
 
-    fn get_mem_map() -> MemoryMap {
+    fn get_test_mem_map() -> MemoryMap {
         MemoryMap {
             mappings: vec![
                 MemoryMapping {

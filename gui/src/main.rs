@@ -1,9 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
-use std::path::PathBuf;
-
 use eframe::egui;
+
+use crate::file_handling::PatchSet;
+
+mod file_handling;
+mod types;
 
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
@@ -27,6 +30,8 @@ enum ISOStatus {
 struct MyApp {
     iso_path: String,
     iso_status: ISOStatus,
+    patch_sets: Vec<PatchSet>,
+    current_patch_set: u32,
 }
 
 impl Default for MyApp {
@@ -34,6 +39,8 @@ impl Default for MyApp {
         Self {
             iso_path: String::from(""),
             iso_status: ISOStatus::Unknown,
+            patch_sets: Vec::new(),
+            current_patch_set: 0,
         }
     }
 }

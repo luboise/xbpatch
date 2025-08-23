@@ -1,0 +1,86 @@
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, Read, Seek, SeekFrom},
+    path::PathBuf,
+    process::{Command, Stdio},
+    time::Duration,
+};
+
+pub fn extract_iso(iso_path: &PathBuf, extraction_path: &PathBuf) -> Result<(), std::io::Error> {
+    // If the folder doesn't exist (or the user just deleted it), then extract the game
+    if cfg!(target_os = "windows") {
+        todo!();
+    } else {
+        let mut extractor = Command::new("extract-xiso")
+            .arg("-x")
+            .arg(&iso_path)
+            .arg("-d")
+            .arg(&extraction_path)
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to start extract-xiso");
+
+        // .expect("Failed to start extract-xiso");
+
+        let estd = extractor.stdout.take().ok_or(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed to capture stdout",
+        ))?;
+
+        let command_stdout_reader = BufReader::new(estd);
+
+        let reader = std::thread::spawn(move || {
+            for line in command_stdout_reader.lines() {
+                if let Ok(line) = line {
+                    print!("{}", line);
+                    std::thread::sleep(Duration::from_millis(10));
+                };
+            }
+        });
+        extractor.wait()?;
+        // .expect("Failed to wait on extract-xiso");
+        reader.join();
+        // .expect("Unable to join reader thread.");
+    };
+
+    Ok(())
+}
+
+pub fn create_iso(iso_path: &PathBuf, iso_files_path: &PathBuf) -> Result<(), std::io::Error> {
+    // If the folder doesn't exist (or the user just deleted it), then extract the game
+    if cfg!(target_os = "windows") {
+        todo!();
+    } else {
+        let mut extractor = Command::new("extract-xiso")
+            .arg("-c")
+            .arg(&iso_files_path)
+            .arg(&iso_path)
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to start extract-xiso");
+
+        // .expect("Failed to start extract-xiso");
+
+        let estd = extractor.stdout.take().ok_or(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Failed to capture stdout",
+        ))?;
+
+        let command_stdout_reader = BufReader::new(estd);
+
+        let reader = std::thread::spawn(move || {
+            for line in command_stdout_reader.lines() {
+                if let Ok(line) = line {
+                    print!("{}", line);
+                    std::thread::sleep(Duration::from_millis(10));
+                };
+            }
+        });
+        extractor.wait()?;
+        // .expect("Failed to wait on extract-xiso");
+        reader.join();
+        // .expect("Unable to join reader thread.");
+    };
+
+    Ok(())
+}
