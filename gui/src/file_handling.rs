@@ -7,7 +7,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use xbpatch_core::patching::PatchEntry;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct PatchSet {
     pub xbpatchset_schema: u32,
     pub name: String,
@@ -32,6 +32,17 @@ pub struct LoadedPatchSet {
 }
 
 impl LoadedPatchSet {
+    pub fn new(path: &PathBuf) -> Result<Self, std::io::Error> {
+        let file = LiveFile::<PatchSet>::from_existing(path)?;
+        let patch_set: PatchSet = file.data().clone();
+
+        Ok(LoadedPatchSet {
+            file,
+            patch_set,
+            enabled_entries: Vec::new(),
+        })
+    }
+
     pub fn path(&self) -> &PathBuf {
         self.file.path()
     }

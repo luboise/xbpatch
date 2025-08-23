@@ -11,3 +11,7 @@ serde_json = "1.0.143"
 
 eframe = "0.32.1"
 env_logger = "0.11.8"
+
+walkdir = "2.5.0"
+
+dirs-next = "2.0.0"

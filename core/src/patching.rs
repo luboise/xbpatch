@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum PatchOffsetType {
     Raw,
     Virtual,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Patch {
     pub offset: u32,
     pub offset_type: PatchOffsetType,
@@ -21,7 +21,7 @@ pub trait HasPatches {
     fn set_patches(&mut self, patch: Vec<Patch>) -> Result<(), Box<dyn std::error::Error>>;
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PatchEntry {
     name: String,
     description: String,
