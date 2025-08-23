@@ -1,9 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
-use std::{env, path::PathBuf};
+use std::{
+    env,
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
 
 use eframe::egui::{self, Color32, Id, Modal, TextEdit, warn_if_debug_build};
+use egui_file::FileDialog;
 
 use crate::file_handling::LoadedPatchSet;
 
@@ -25,8 +30,9 @@ fn main() -> eframe::Result {
 
 enum ISOStatus {
     Valid,
+    UnrecognisedFiletype,
+    FileDoesntExist,
     Unknown,
-    Invalid,
 }
 
 #[derive(PartialEq)]
@@ -36,10 +42,15 @@ enum XBPatchAppStatus {
     NeedReload,
     GettingNewPatchSetName,
     DeletionPrompt,
+    SelectedInputISO,
 }
 
 struct XBPatchApp {
     status: XBPatchAppStatus,
+
+    iso_finder_dialog: Option<FileDialog>,
+    iso_finder: Option<PathBuf>,
+
     iso_path: String,
     iso_status: ISOStatus,
     patch_sets_path: Option<PathBuf>,
@@ -61,12 +72,14 @@ impl Default for XBPatchApp {
 
         Self {
             status: XBPatchAppStatus::Startup,
-            iso_path: String::new(),
+            iso_path: Default::default(),
             iso_status: ISOStatus::Unknown,
             patch_sets_path,
             loaded_patches: Vec::new(),
             current_patch_set: 0,
             modal_input: String::new(),
+            iso_finder_dialog: None,
+            iso_finder: None,
         }
     }
 }
@@ -247,6 +260,21 @@ impl eframe::App for XBPatchApp {
                     self.status = XBPatchAppStatus::Normal;
                 }
             }
+            XBPatchAppStatus::SelectedInputISO => {
+                if let Ok(b) = std::fs::exists(&self.iso_path) {
+                    if !b {
+                        self.iso_status = ISOStatus::FileDoesntExist
+                    } else if !self.iso_path.ends_with(".iso") {
+                        self.iso_status = ISOStatus::UnrecognisedFiletype;
+                    } else {
+                        self.iso_status = ISOStatus::Valid;
+                    }
+                } else {
+                    self.iso_status = ISOStatus::Unknown;
+                }
+
+                self.status = XBPatchAppStatus::Normal;
+            }
         };
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -306,20 +334,54 @@ impl eframe::App for XBPatchApp {
                 ui.group(|ui| {
                     ui.add(egui::TextEdit::singleline(&mut self.iso_path));
                     if ui.button("Choose").clicked() {
-                        // TODO: Select file here
+                        let filter = Box::new({
+                            let ext = [OsStr::new("iso"), OsStr::new("xbe")];
+                            move |path: &Path| -> bool {
+                                ext.contains(
+                                    &path
+                                        .extension()
+                                        .unwrap_or(OsStr::new("BAD_FILE_DONT_ACCEPT")),
+                                )
+                            }
+                        });
+                        let mut dialog = FileDialog::open_file(self.iso_finder.clone())
+                            .show_files_filter(filter)
+                            .title("Select an XBOX ISO");
+
+                        dialog.set_path(
+                            dirs_next::home_dir()
+                                .unwrap_or_default()
+                                .to_str()
+                                .unwrap_or(""),
+                        );
+
+                        dialog.open();
+                        self.iso_finder_dialog = Some(dialog);
+                    }
+
+                    if let Some(dialog) = &mut self.iso_finder_dialog {
+                        if dialog.show(ctx).selected() {
+                            if let Some(file) = dialog.path() {
+                                self.iso_path = String::from(file.to_str().unwrap_or(""));
+                            }
+
+                            self.iso_status = ISOStatus::Unknown;
+                            self.status = XBPatchAppStatus::SelectedInputISO;
+                        }
                     }
                 });
 
                 let color = match self.iso_status {
                     ISOStatus::Valid => egui::Color32::GREEN,
-                    ISOStatus::Invalid => egui::Color32::RED,
                     ISOStatus::Unknown => egui::Color32::GRAY,
+                    _ => egui::Color32::RED,
                 };
 
                 let text = match self.iso_status {
                     ISOStatus::Valid => "ISO located.",
                     ISOStatus::Unknown => "Unknown status.",
-                    ISOStatus::Invalid => "Unable to locate ISO on disk.",
+                    ISOStatus::UnrecognisedFiletype => "Unknown file type.",
+                    ISOStatus::FileDoesntExist => "File could not be found.",
                 };
 
                 ui.colored_label(color, text);
