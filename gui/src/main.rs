@@ -8,6 +8,7 @@ use eframe::egui::{self, Color32, Id, Modal, TextEdit};
 use crate::file_handling::LoadedPatchSet;
 
 mod file_handling;
+mod modals;
 
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
@@ -32,7 +33,9 @@ enum ISOStatus {
 enum XBPatchAppStatus {
     Startup,
     Normal,
+    NeedReload,
     GettingNewPatchSetName,
+    DeletionPrompt,
 }
 
 struct XBPatchApp {
@@ -59,7 +62,7 @@ impl Default for XBPatchApp {
 
         Self {
             status: XBPatchAppStatus::Startup,
-            iso_path: String::from(""),
+            iso_path: String::new(),
             iso_status: ISOStatus::Unknown,
             patch_sets_path,
             loaded_patches: Vec::new(),
@@ -70,6 +73,9 @@ impl Default for XBPatchApp {
 }
 
 impl XBPatchApp {
+    pub fn current_patch_set(&self) -> Option<&LoadedPatchSet> {
+        None
+    }
     pub fn reload_patch_sets(&mut self) -> Result<(), std::io::Error> {
         match &self.patch_sets_path {
             Some(p) => {
@@ -135,6 +141,10 @@ impl eframe::App for XBPatchApp {
 
                 self.status = XBPatchAppStatus::Normal
             }
+            XBPatchAppStatus::NeedReload => {
+                self.reload_patch_sets();
+                self.status = XBPatchAppStatus::Normal;
+            }
             XBPatchAppStatus::Normal => {}
             XBPatchAppStatus::GettingNewPatchSetName => {
                 Modal::new(Id::new("Getting New Patch Set Name"))
@@ -183,6 +193,41 @@ impl eframe::App for XBPatchApp {
                         });
                     });
             }
+            XBPatchAppStatus::DeletionPrompt => match self.current_patch_set() {
+                Some(cps) => {
+                    let path: &PathBuf = cps.path();
+
+                    let text = format!(
+                        "Are you sure that you would like to delete patch set {}\n{}",
+                        cps.data().name,
+                        cps.path().display()
+                    );
+
+                    match modals::ask_user(ctx, "PatchSet Deletion", &text) {
+                        Some(b) => {
+                            if b {
+                                match std::fs::remove_file(path) {
+                                    Ok(_) => {
+                                        println!("Successfully deleted {}", &path.display());
+                                        self.status = XBPatchAppStatus::NeedReload;
+                                        self.current_patch_set = 0;
+                                    }
+                                    Err(_) => {
+                                        eprintln!("Unable to delete {}", path.display());
+                                    }
+                                };
+                            }
+
+                            self.status = XBPatchAppStatus::Normal;
+                        }
+                        None => todo!(),
+                    };
+                }
+                None => {
+                    eprintln!("In deletion prompt state but no patch set is currently selected.");
+                    self.status = XBPatchAppStatus::Normal;
+                }
+            },
         };
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -275,7 +320,14 @@ impl eframe::App for XBPatchApp {
                             };
 
                             if ui.add_sized(button_size, egui::Button::new("-")).clicked() {
-                                // TODO: Prompt for patch set
+                                if self.status == XBPatchAppStatus::Normal {
+                                    match self.current_patch_set() {
+                                        Some(cps) => self.status = XBPatchAppStatus::DeletionPrompt,
+                                        None => {
+                                            eprintln!("Unable to delete when no patch set has been selected.");
+                                        }
+                                    };
+                                }
                             };
                         });
                     });
