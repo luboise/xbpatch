@@ -59,6 +59,13 @@ impl LoadedPatchSet {
         })
     }
 
+    pub fn filename_from_name(name: &str) -> String {
+        let mut ret = name.to_lowercase().replace(' ', "_");
+        ret.push_str(".json");
+
+        ret
+    }
+
     pub fn path(&self) -> &PathBuf {
         self.file.path()
     }

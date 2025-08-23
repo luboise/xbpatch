@@ -158,12 +158,16 @@ impl eframe::App for XBPatchApp {
                         ui.label("Please enter a name for the new patch set:");
                         ui.add(TextEdit::singleline(&mut self.modal_input));
 
+                        let new_filename = LoadedPatchSet::filename_from_name(&self.modal_input);
+
+                        ui.label(format!("The new filename will be\n{}", new_filename));
+
                         ui.horizontal(|ui| {
                             if ui.button("OK").clicked() {
                                 println!("User entered new patch set: {}", &self.modal_input);
 
                                 if let Some(p) = &self.patch_sets_path {
-                                    let new_path = p.join("name.json");
+                                    let new_path = p.join(new_filename);
 
                                     match LoadedPatchSet::create_new(
                                         self.modal_input.clone(),
@@ -259,80 +263,89 @@ impl eframe::App for XBPatchApp {
                         });
                 });
 
-            egui::CentralPanel::default().show_inside(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.heading("ISO");
+            ui.horizontal(|ui| {
+                ui.heading("ISO");
 
-                    ui.group(|ui| {
-                        ui.add(egui::TextEdit::singleline(&mut self.iso_path));
-                        if ui.button("Choose").clicked() {
-                            // TODO: Select file here
-                        }
-                    });
-
-                    let color = match self.iso_status {
-                        ISOStatus::Valid => egui::Color32::GREEN,
-                        ISOStatus::Invalid => egui::Color32::RED,
-                        ISOStatus::Unknown => egui::Color32::GRAY,
-                    };
-
-                    let text = match self.iso_status {
-                        ISOStatus::Valid => "ISO located.",
-                        ISOStatus::Unknown => "Unknown status.",
-                        ISOStatus::Invalid => "Unable to locate ISO on disk.",
-                    };
-
-                    ui.colored_label(color, text);
-                });
-
-                ui.heading("Patch Sets");
                 ui.group(|ui| {
+                    ui.add(egui::TextEdit::singleline(&mut self.iso_path));
+                    if ui.button("Choose").clicked() {
+                        // TODO: Select file here
+                    }
+                });
+
+                let color = match self.iso_status {
+                    ISOStatus::Valid => egui::Color32::GREEN,
+                    ISOStatus::Invalid => egui::Color32::RED,
+                    ISOStatus::Unknown => egui::Color32::GRAY,
+                };
+
+                let text = match self.iso_status {
+                    ISOStatus::Valid => "ISO located.",
+                    ISOStatus::Unknown => "Unknown status.",
+                    ISOStatus::Invalid => "Unable to locate ISO on disk.",
+                };
+
+                ui.colored_label(color, text);
+            });
+
+            ui.heading("Patch Sets");
+
+            egui::ScrollArea::vertical()
+                .auto_shrink(true)
+                .show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        ui.allocate_ui(
-                            egui::Vec2::new(ui.available_width() * 0.8, ui.available_height()),
-                            |ui| {
-                                egui::ScrollArea::vertical().show(ui, |ui| {
-                                    egui::Grid::new("patch_sets")
-                                        .num_columns(2)
-                                        .spacing([40.0, 4.0])
-                                        .striped(false)
-                                        .show(ui, |ui| {
-                                            self.loaded_patches.iter().for_each(|lps| {
-                                                let patch_set = lps.data();
-                                                let label_text = format!("0/{}", patch_set.len());
-                                                ui.label(label_text);
-                                                ui.label(&patch_set.name);
-                                                ui.end_row();
-                                            });
-                                        });
+                        egui::Grid::new("patch_sets")
+                            .num_columns(2)
+                            .spacing([40.0, 4.0])
+                            .striped(false)
+                            .show(ui, |ui| {
+                                self.loaded_patches.iter().for_each(|lps| {
+                                    let patch_set = lps.data();
+
+                                    let label_text = format!("0/{}", patch_set.len());
+                                    ui.label(label_text);
+                                    ui.label(&patch_set.name);
+                                    ui.end_row();
                                 });
-                            },
-                        );
+                            });
 
-                        ui.vertical(|ui| {
-                            let button_size = egui::vec2(30.0, 30.0);
+                        ui.group(|ui| {
+                            ui.vertical(|ui| {
+                                let button_size = egui::vec2(30.0, 30.0);
 
-                            if ui.add_sized(button_size, egui::Button::new("+")).clicked() {
-                                if self.status == XBPatchAppStatus::Normal {
-                                    self.status = XBPatchAppStatus::GettingNewPatchSetName;
-                                    self.modal_input.clear();
-                                }
-                            };
+                                if ui
+                                    .add_sized(button_size, egui::Button::new("+"))
+                                    .on_hover_text("Create new patch set.")
+                                    .clicked()
+                                {
+                                    if self.status == XBPatchAppStatus::Normal {
+                                        self.modal_input.clear();
+                                        self.status = XBPatchAppStatus::GettingNewPatchSetName;
+                                    }
+                                };
 
-                            if ui.add_sized(button_size, egui::Button::new("-")).clicked() {
-                                if self.status == XBPatchAppStatus::Normal {
-                                    match self.current_patch_set() {
-                                        Some(cps) => self.status = XBPatchAppStatus::DeletionPrompt,
-                                        None => {
-                                            eprintln!("Unable to delete when no patch set has been selected.");
-                                        }
-                                    };
-                                }
-                            };
-                        });
+                                if ui.add_sized(button_size, egui::Button::new("-"))
+
+
+                                    .on_hover_text("Delete selected patch set.")
+                                    .clicked() {
+                                    if self.status == XBPatchAppStatus::Normal {
+                                        match self.current_patch_set() {
+                                            Some(cps) => {
+                                                self.status = XBPatchAppStatus::DeletionPrompt
+                                            }
+                                            None => {
+                                                eprintln!(
+                                        "Unable to delete when no patch set has been selected."
+                                    );
+                                            }
+                                        };
+                                    }
+                                };
+                            });
+                        })
                     });
                 });
-            });
         });
     }
 }
