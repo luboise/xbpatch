@@ -1,17 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 #![allow(rustdoc::missing_crate_level_docs)] // it's an example
 
-use std::{env, path::PathBuf, process::id};
+use std::{env, path::PathBuf};
 
-use eframe::{
-    Frame,
-    egui::{self, Color32, Id, Modal, TextEdit},
-};
+use eframe::egui::{self, Color32, Id, Modal, TextEdit};
 
 use crate::file_handling::LoadedPatchSet;
 
 mod file_handling;
-mod types;
 
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
@@ -77,6 +73,11 @@ impl XBPatchApp {
     pub fn reload_patch_sets(&mut self) -> Result<(), std::io::Error> {
         match &self.patch_sets_path {
             Some(p) => {
+                if !p.exists() {
+                    std::fs::create_dir_all(p)?;
+                    return Ok(());
+                }
+
                 self.loaded_patches.clear();
 
                 for entry in walkdir::WalkDir::new(p)
