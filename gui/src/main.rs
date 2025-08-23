@@ -3,7 +3,7 @@
 
 use eframe::egui;
 
-use crate::file_handling::PatchSet;
+use crate::file_handling::LoadedPatchSet;
 
 mod file_handling;
 mod types;
@@ -30,7 +30,7 @@ enum ISOStatus {
 struct MyApp {
     iso_path: String,
     iso_status: ISOStatus,
-    patch_sets: Vec<PatchSet>,
+    loaded_patches: Vec<LoadedPatchSet>,
     current_patch_set: u32,
 }
 
@@ -39,7 +39,7 @@ impl Default for MyApp {
         Self {
             iso_path: String::from(""),
             iso_status: ISOStatus::Unknown,
-            patch_sets: Vec::new(),
+            loaded_patches: Vec::new(),
             current_patch_set: 0,
         }
     }
@@ -114,13 +114,13 @@ impl eframe::App for MyApp {
                                         .spacing([40.0, 4.0])
                                         .striped(false)
                                         .show(ui, |ui| {
-                                            ui.label("0/15");
-                                            ui.label("ghoulies_main_patches.json");
-                                            ui.end_row();
-
-                                            ui.label("2/15");
-                                            ui.label("ghoulies_graphics_patches.json");
-                                            ui.end_row();
+                                            self.loaded_patches.iter().map(|lps| {
+                                                let patch_set = lps.data();
+                                                let label_text = format!("0/{}", patch_set.len());
+                                                ui.label(label_text);
+                                                ui.label(&patch_set.name);
+                                                ui.end_row();
+                                            });
                                         });
                                 });
                             },

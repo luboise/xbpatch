@@ -3971,6 +3971,9 @@ version = "0.1.0"
 dependencies = [
  "eframe",
  "env_logger",
+ "serde",
+ "serde_json",
+ "xbpatch-core",
 ]
 
 [[package]]
