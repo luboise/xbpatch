@@ -51,8 +51,12 @@ struct XBPatchApp {
     iso_finder_dialog: Option<FileDialog>,
     iso_finder: Option<PathBuf>,
 
-    iso_path: String,
-    iso_status: ISOStatus,
+    input_iso_path: String,
+    input_iso_status: ISOStatus,
+
+    output_iso_path: String,
+    output_iso_status: ISOStatus,
+
     patch_sets_path: Option<PathBuf>,
     loaded_patches: Vec<LoadedPatchSet>,
     current_patch_set: u32,
@@ -72,8 +76,12 @@ impl Default for XBPatchApp {
 
         Self {
             status: XBPatchAppStatus::Startup,
-            iso_path: Default::default(),
-            iso_status: ISOStatus::Unknown,
+            // ISO files
+            input_iso_path: Default::default(),
+            input_iso_status: ISOStatus::Unknown,
+            output_iso_path: Default::default(),
+            output_iso_status: ISOStatus::Unknown,
+            // Patch set folder
             patch_sets_path,
             loaded_patches: Vec::new(),
             current_patch_set: 0,
@@ -261,16 +269,31 @@ impl eframe::App for XBPatchApp {
                 }
             }
             XBPatchAppStatus::SelectedInputISO => {
-                if let Ok(b) = std::fs::exists(&self.iso_path) {
+                if let Ok(b) = std::fs::exists(&self.input_iso_path) {
                     if !b {
-                        self.iso_status = ISOStatus::FileDoesntExist
-                    } else if !self.iso_path.ends_with(".iso") {
-                        self.iso_status = ISOStatus::UnrecognisedFiletype;
+                        self.input_iso_status = ISOStatus::FileDoesntExist
+                    } else if !self.input_iso_path.ends_with(".iso") {
+                        self.input_iso_status = ISOStatus::UnrecognisedFiletype;
                     } else {
-                        self.iso_status = ISOStatus::Valid;
+                        self.input_iso_status = ISOStatus::Valid;
+
+                        let path_buf = PathBuf::from(&self.input_iso_path);
+
+                        let stem = path_buf
+                            .file_stem()
+                            .unwrap_or_else(|| std::ffi::OsStr::new("file"));
+
+                        self.output_iso_path = path_buf
+                            .with_file_name(format!(
+                                "{}_patched.iso",
+                                stem.to_str().unwrap_or("file")
+                            ))
+                            .to_str()
+                            .unwrap_or("error")
+                            .into();
                     }
                 } else {
-                    self.iso_status = ISOStatus::Unknown;
+                    self.input_iso_status = ISOStatus::Unknown;
                 }
 
                 self.status = XBPatchAppStatus::Normal;
@@ -329,10 +352,9 @@ impl eframe::App for XBPatchApp {
                 });
 
             ui.horizontal(|ui| {
-                ui.heading("ISO");
-
+                ui.heading("Input ISO");
                 ui.group(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut self.iso_path));
+                    ui.add(egui::TextEdit::singleline(&mut self.input_iso_path));
                     if ui.button("Choose").clicked() {
                         let filter = Box::new({
                             let ext = [OsStr::new("iso"), OsStr::new("xbe")];
@@ -362,22 +384,29 @@ impl eframe::App for XBPatchApp {
                     if let Some(dialog) = &mut self.iso_finder_dialog {
                         if dialog.show(ctx).selected() {
                             if let Some(file) = dialog.path() {
-                                self.iso_path = String::from(file.to_str().unwrap_or(""));
+                                self.input_iso_path = String::from(file.to_str().unwrap_or(""));
                             }
 
-                            self.iso_status = ISOStatus::Unknown;
+                            self.input_iso_status = ISOStatus::Unknown;
                             self.status = XBPatchAppStatus::SelectedInputISO;
                         }
                     }
                 });
+            });
 
-                let color = match self.iso_status {
+            ui.horizontal(|ui| {
+                ui.heading("Output ISO");
+                ui.group(|ui| {
+                    ui.add(egui::TextEdit::singleline(&mut self.output_iso_path));
+                });
+
+                let color = match self.input_iso_status {
                     ISOStatus::Valid => egui::Color32::GREEN,
                     ISOStatus::Unknown => egui::Color32::GRAY,
                     _ => egui::Color32::RED,
                 };
 
-                let text = match self.iso_status {
+                let text = match self.input_iso_status {
                     ISOStatus::Valid => "ISO located.",
                     ISOStatus::Unknown => "Unknown status.",
                     ISOStatus::UnrecognisedFiletype => "Unknown file type.",
