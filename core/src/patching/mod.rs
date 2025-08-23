@@ -1,4 +1,8 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+pub mod serialization;
+
+use serialization::*;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum PatchOffsetType {
@@ -8,9 +12,20 @@ pub enum PatchOffsetType {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Patch {
+    #[serde(serialize_with = "se_u32_to_hex", deserialize_with = "de_hex_to_u32")]
     pub offset: u32,
+
     pub offset_type: PatchOffsetType,
+
+    #[serde(serialize_with = "se_vu8_to_hex", deserialize_with = "de_hex_to_vu8")]
     pub replacement_bytes: Vec<u8>,
+
+    #[serde(
+        serialize_with = "se_ovu8_to_hex",
+        deserialize_with = "de_hex_to_ovu8",
+        skip_serializing_if = "Option::is_none",
+        default = "get_none"
+    )]
     pub original_bytes: Option<Vec<u8>>,
 }
 

@@ -45,7 +45,6 @@ struct XBPatchApp {
     patch_sets_path: Option<PathBuf>,
     loaded_patches: Vec<LoadedPatchSet>,
     current_patch_set: u32,
-
     modal_input: String,
 }
 
@@ -73,14 +72,30 @@ impl Default for XBPatchApp {
 }
 
 impl XBPatchApp {
-    pub fn current_patch_set(&self) -> Option<&LoadedPatchSet> {
+    pub fn has_current_patch_set(&self) -> bool {
+        self.current_loaded_patch_set().is_some()
+    }
+
+    pub fn current_loaded_patch_set(&self) -> Option<&LoadedPatchSet> {
         let i = self.current_patch_set as usize;
 
         if i < self.loaded_patches.len() {
             return Some(&self.loaded_patches[i]);
         }
+
         None
     }
+
+    pub fn current_loaded_patch_set_mut(&mut self) -> Option<&mut LoadedPatchSet> {
+        let i = self.current_patch_set as usize;
+
+        if i < self.loaded_patches.len() {
+            return Some(&mut self.loaded_patches[i]);
+        }
+
+        None
+    }
+
     pub fn reload_patch_sets(&mut self) -> Result<(), std::io::Error> {
         match &self.patch_sets_path {
             Some(p) => {
@@ -200,7 +215,7 @@ impl eframe::App for XBPatchApp {
                     });
             }
             XBPatchAppStatus::DeletionPrompt => {
-                if let Some(cps) = self.current_patch_set() {
+                if let Some(cps) = self.current_loaded_patch_set() {
                     let text = format!(
                         "Are you sure that you would like to delete patch set {}\n{}",
                         cps.data().name,
@@ -244,23 +259,47 @@ impl eframe::App for XBPatchApp {
             egui::SidePanel::right("scroll_test")
                 .max_width(0.45 * width)
                 .show_inside(ui, |ui| {
-                    ui.label(
-                        "The scroll area below has many labels with interactive tooltips. \
-                 The purpose is to test that the tooltips close when you scroll.",
-                    )
-                    .on_hover_text("Try hovering a label below, then scroll!");
-                    egui::ScrollArea::vertical()
-                        .auto_shrink(false)
-                        .show(ui, |ui| {
-                            for i in 0..1000 {
-                                ui.label(format!("This is line {i}")).on_hover_ui(|ui| {
-                                    ui.style_mut().interaction.selectable_labels = true;
-                                    ui.label(
-                            "This tooltip is interactive, because the text in it is selectable.",
-                        );
-                                });
-                            }
-                        });
+                    if let Some(mut_lps) = self.current_loaded_patch_set_mut() {
+                        /*
+                        if lps.data().len() == 0 {
+                            ui.heading(format!("No patches in {}.", lps.data().name));
+                            return;
+                        }
+                        */
+
+                        // Make sure the number of bools matches the number of patches
+
+                        // let enabled = self.enabled_entries();
+
+                        // debug_assert_eq!(enabled.len(), lps.data().len());
+
+                        egui::ScrollArea::vertical()
+                            .auto_shrink(false)
+                            .show(ui, |ui| {
+                                egui::Grid::new("patches_viewer")
+                                    .num_columns(2)
+                                    .spacing([40.0, 4.0])
+                                    .striped(false)
+                                    .show(ui, |ui| {
+                                        let len = mut_lps.enabled_entries_mut().len();
+
+                                        for i in 0..len {
+                                            let mut_bool = &mut mut_lps.enabled_entries_mut()[i];
+                                            ui.checkbox(mut_bool, format!("patch_checkbox_{}", i));
+
+                                            let patch_entry_name = mut_lps
+                                                .get_patch_entry(i)
+                                                .map(|v| v.name().clone())
+                                                .unwrap_or_else(|| {
+                                                    "Error fetching name".to_string()
+                                                });
+                                            ui.label(patch_entry_name);
+                                        }
+                                    });
+                            });
+                    } else {
+                        ui.heading("Current patch set is unavailable.");
+                    }
                 });
 
             ui.horizontal(|ui| {
@@ -344,7 +383,7 @@ impl eframe::App for XBPatchApp {
                                     .on_hover_text("Delete selected patch set.")
                                     .clicked() {
                                     if self.status == XBPatchAppStatus::Normal {
-                                        match self.current_patch_set() {
+                                        match self.current_loaded_patch_set() {
                                             Some(cps) => {
                                                 self.status = XBPatchAppStatus::DeletionPrompt
                                             }

@@ -26,20 +26,32 @@ impl PatchSet {
 
 pub struct LoadedPatchSet {
     file: LiveFile<PatchSet>,
-    patch_set: PatchSet,
+    pub patch_set: PatchSet,
     // Array of indices showing which patch entries are enabled
-    enabled_entries: Vec<u8>,
+    enabled_entries: Vec<bool>,
 }
 
 impl LoadedPatchSet {
+    pub fn get_patch_entry(&mut self, index: usize) -> Option<&PatchEntry> {
+        self.patch_set.entries.get(index)
+    }
+
+    pub fn enabled_entries(&self) -> &Vec<bool> {
+        &self.enabled_entries
+    }
+
+    pub fn enabled_entries_mut(&mut self) -> &mut Vec<bool> {
+        &mut self.enabled_entries
+    }
+
     pub fn existing(path: &PathBuf) -> Result<Self, std::io::Error> {
         let file = LiveFile::<PatchSet>::from_existing(path)?;
         let patch_set: PatchSet = file.data().clone();
 
         Ok(LoadedPatchSet {
             file,
+            enabled_entries: Vec::with_capacity(patch_set.len()),
             patch_set,
-            enabled_entries: Vec::new(),
         })
     }
 
@@ -69,8 +81,12 @@ impl LoadedPatchSet {
     pub fn path(&self) -> &PathBuf {
         self.file.path()
     }
+
     pub fn data(&self) -> &PatchSet {
         &self.patch_set
+    }
+    pub fn data_mut(&mut self) -> &mut PatchSet {
+        &mut self.patch_set
     }
 }
 
