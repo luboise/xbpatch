@@ -5,13 +5,17 @@ use std::{
     env,
     ffi::OsStr,
     path::{Path, PathBuf},
+    sync::{Arc, RwLock},
 };
 
 use eframe::egui::{self, Color32, Id, Modal, TextEdit};
 use egui_file::FileDialog;
 
 mod file_handling;
-use crate::{file_handling::LoadedPatchSet, patching::PatchSpecification};
+use crate::{
+    file_handling::LoadedPatchSet,
+    patching::{PatchSpecification, ThreadContext},
+};
 
 mod modals;
 mod patching;
@@ -48,7 +52,13 @@ enum XBPatchAppStatus {
     // Patch related
     ConfirmingPatch,
     Patching,
-    CompletedPatch,
+}
+
+#[derive(Debug, PartialEq)]
+enum PatchProgress {
+    InProgress,
+    Success,
+    Failed,
 }
 
 struct XBPatchApp {
@@ -69,11 +79,16 @@ struct XBPatchApp {
     output_iso_status: ISOStatus,
 
     patch_specification: Option<PatchSpecification>,
+    patch_progress: PatchProgress,
 
     patch_sets_path: Option<PathBuf>,
     loaded_patches: Vec<LoadedPatchSet>,
     current_patch_set: u32,
     modal_input: String,
+
+    thread_context: Arc<RwLock<ThreadContext>>,
+
+    force_reextract: bool,
 }
 
 impl Default for XBPatchApp {
@@ -109,7 +124,12 @@ impl Default for XBPatchApp {
             modal_input: String::new(),
             iso_finder_dialog: None,
             iso_finder: None,
+
             patch_specification: None,
+            patch_progress: PatchProgress::Success,
+
+            thread_context: Arc::new(RwLock::new(Default::default())),
+            force_reextract: false,
         }
     }
 }
@@ -302,8 +322,15 @@ Patches:
                             .join("\n")
                     );
 
+                    let spec_clone = spec.clone();
                     modals::ask_user(ctx, "confirm_patch", &text, |b| {
                         if b {
+                            let thread_ctx = self.thread_context.clone();
+
+                            std::thread::spawn(move || {
+                                patching::patch_iso_thread(thread_ctx, spec_clone);
+                            });
+
                             self.status = XBPatchAppStatus::Patching
                         } else {
                             self.status = XBPatchAppStatus::Normal;
@@ -318,9 +345,36 @@ Patches:
                 }
             }
             XBPatchAppStatus::Patching => {
-                println!("Do the patch here.");
+                Modal::new(Id::new("patching_modal"))
+                    .backdrop_color(Color32::from_black_alpha(100))
+                    .show(ctx, |ui| {
+                        ui.heading("Patch Progress");
+
+                        let mut str: String = Default::default();
+                        let mut finished = false;
+
+                        {
+                            let ctx = self.thread_context.read().unwrap();
+                            str = String::from(ctx.log());
+                            finished = ctx.completed();
+                        }
+
+                        ui.add(TextEdit::multiline(&mut str).interactive(false));
+
+                        ui.horizontal(|ui| {
+                            // if ui.button("Cancel").clicked() {
+                            //     self.status = XBPatchAppStatus::Normal;
+                            //     self.modal_input.clear();
+                            // }
+
+                            if ui.button("OK").clicked() && finished {
+                                if self.patch_progress != PatchProgress::InProgress {
+                                    self.status = XBPatchAppStatus::Normal;
+                                };
+                            }
+                        });
+                    });
             }
-            XBPatchAppStatus::CompletedPatch => todo!(),
         };
     }
 
@@ -662,6 +716,9 @@ impl eframe::App for XBPatchApp {
                     }
                 };
             });
+
+            ui.checkbox(&mut self.force_reextract, "Force re-extraction")
+                .on_hover_text("Force a re-extraction of an iso to occur when its contents have already been extracted in a previous patch. Useful if the files in the extraction become corrupt.");
 
             if ui.button("Patch").clicked() {
                 if self.status == XBPatchAppStatus::Normal {

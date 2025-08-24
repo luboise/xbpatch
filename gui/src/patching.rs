@@ -1,15 +1,25 @@
-use std::path::PathBuf;
+use std::{
+    ffi::OsStr,
+    path::PathBuf,
+    sync::{Arc, RwLock},
+};
 
-use xbpatch_core::patching::PatchEntry;
+use walkdir::WalkDir;
+use xbpatch_core::{
+    iso_handling,
+    patching::PatchEntry,
+    xbe::{PatchReport, XBEWriter},
+};
 
 use crate::XBPatchApp;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PatchSpecification {
     in_file: PathBuf,
     out_file: PathBuf,
     temp_folder: PathBuf,
     entries: Vec<PatchEntry>,
+    force_reextract: bool,
 }
 
 impl PatchSpecification {
@@ -19,6 +29,7 @@ impl PatchSpecification {
             out_file: Default::default(),
             temp_folder: Default::default(),
             entries: Vec::new(),
+            force_reextract: app.force_reextract,
         };
 
         for loaded_set in app.loaded_patch_sets() {
@@ -43,9 +54,6 @@ impl PatchSpecification {
             None => app.cwd_path.join("xbpatch_temp"),
         };
 
-        spec.temp_folder =
-            std::env::current_dir().unwrap_or(dirs_next::home_dir().unwrap().join("xbpatch_temp"));
-
         Ok(spec)
     }
 
@@ -64,4 +72,196 @@ impl PatchSpecification {
     pub fn entries(&self) -> &[PatchEntry] {
         &self.entries
     }
+}
+
+#[derive(Debug, Default)]
+pub struct ThreadContext {
+    completed: bool,
+    error: bool,
+    log: String,
+}
+
+impl ThreadContext {
+    pub fn log(&self) -> &str {
+        &self.log
+    }
+
+    pub fn completed(&self) -> bool {
+        self.completed
+    }
+}
+
+pub fn patch_iso_thread(ctx_lock: Arc<RwLock<ThreadContext>>, spec: PatchSpecification) {
+    {
+        let mut ctx = ctx_lock.write().unwrap();
+
+        ctx.log.clear();
+        ctx.completed = false;
+        ctx.error = false;
+    }
+
+    // Helper functions for printing
+    let ctx_print = |ctx_lock: &Arc<RwLock<ThreadContext>>, message: String| {
+        let mut ctx = ctx_lock.write().unwrap();
+
+        ctx.log.push_str("\n");
+        ctx.log.push_str(message.as_ref());
+    };
+
+    let ctx_error = |ctx_lock: &Arc<RwLock<ThreadContext>>, msg: String| {
+        ctx_print(&ctx_lock, msg);
+
+        let mut ctx = ctx_lock.write().unwrap();
+        ctx.log.push_str("\n\nPatching failed.");
+        ctx.completed = false;
+        ctx.error = false;
+    };
+
+    ctx_print(
+        &ctx_lock,
+        format!(
+            "Extracting {} to {}.",
+            &spec.in_file.display(),
+            &spec.temp_folder.display()
+        ),
+    );
+
+    let extraction_path: PathBuf = spec
+        .temp_folder
+        .join("isos")
+        .join(spec.in_file().file_stem().unwrap_or(OsStr::new("temp")));
+
+    if extraction_path.exists() && extraction_path.is_dir() && spec.force_reextract {
+        ctx_print(
+            &ctx_lock,
+            format!("Deleting existing directory {}", extraction_path.display()),
+        );
+        std::fs::remove_dir_all(&extraction_path).expect("Unable to delete existing folder.");
+    }
+
+    // Only extract if the folder doesn't exist
+    if !extraction_path.exists() {
+        ctx_print(&ctx_lock, "Extracting the iso...".to_string());
+
+        match iso_handling::extract_iso(&spec.in_file, &extraction_path) {
+            Ok(_) => (),
+            Err(e) => {
+                ctx_error(&ctx_lock, format!("\nError during ISO extraction.\n{}", e));
+                return;
+            }
+        }
+    }
+
+    ctx_print(&ctx_lock, String::from("Locating default.xbe..."));
+
+    let xbe_path = match |file: PathBuf, path: &PathBuf| -> Option<PathBuf> {
+        for entry in WalkDir::new(path) {
+            if let Ok(entry) = entry {
+                if entry.path().file_name() == file.file_name() {
+                    return Some(entry.path().into());
+                }
+            }
+        }
+        None
+    }("default.xbe".into(), &extraction_path)
+    {
+        Some(p) => p,
+        None => {
+            ctx_error(&ctx_lock, String::from("\nUnable to find default.xbe."));
+
+            return;
+        }
+    };
+
+    ctx_print(
+        &ctx_lock,
+        format!(
+            "\ndefault.xbe located at {}\nBeginning patching...",
+            xbe_path.display()
+        ),
+    );
+
+    // Parse the config
+    let mut xbe_writer = match XBEWriter::new(&xbe_path) {
+        Ok(w) => w,
+        Err(_) => {
+            ctx_error(
+                &ctx_lock,
+                format!(
+                    "Unable to open {} for writing.",
+                    &xbe_path.to_str().unwrap()
+                ),
+            );
+
+            return;
+        }
+    };
+
+    let mut report = PatchReport::default();
+
+    for entry in spec.entries {
+        ctx_print(
+            &ctx_lock,
+            format!("Applying patch \"{}\"...  ", entry.name()),
+        );
+
+        match xbe_writer.apply_patches(&entry) {
+            Ok(patch_report) => {
+                if patch_report.patch_successful() {
+                    report.add_success();
+                } else {
+                    report.add_failure();
+                    ctx_print(&ctx_lock, format!("FAILED to apply {}", entry.name()));
+                }
+            }
+            Err(e) => {
+                ctx_error(
+                    &ctx_lock,
+                    String::from("A critical error occurred applying patches. Unable to continue."),
+                );
+                return;
+            }
+        }
+    }
+
+    if report.failures() == 0 {
+        println!("All patches applied successfully.");
+    } else if report.successes() == 0 {
+        ctx_error(&ctx_lock, String::from("Failed to apply all patches."));
+        return;
+    } else {
+        ctx_print(
+            &ctx_lock,
+            String::from("Some patches failed to apply. Read above for details."),
+        );
+    }
+
+    ctx_print(
+        &ctx_lock,
+        format!("Constructing new iso at {}", spec.out_file.display()),
+    );
+
+    match iso_handling::create_iso(&spec.out_file, &extraction_path) {
+        Ok(_) => {
+            ctx_print(
+                &ctx_lock,
+                format!(
+                    "Successfully wrote new iso to {}.",
+                    &spec
+                        .out_file
+                        .to_str()
+                        .unwrap_or("(Error fetching ISO path)")
+                ),
+            );
+        }
+        Err(e) => {
+            ctx_error(&ctx_lock, String::from("Failed to create iso."));
+            return;
+        }
+    };
+
+    let mut ctx = ctx_lock.write().unwrap();
+    ctx.log.push_str("\n\nPatching completed successfully.");
+    ctx.error = false;
+    ctx.completed = true;
 }

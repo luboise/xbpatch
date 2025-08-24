@@ -6,6 +6,10 @@ use std::{
 };
 
 pub fn extract_iso(iso_path: &PathBuf, extraction_path: &PathBuf) -> Result<(), std::io::Error> {
+    if !extraction_path.exists() {
+        std::fs::create_dir_all(extraction_path)?;
+    }
+
     // If the folder doesn't exist (or the user just deleted it), then extract the game
     if cfg!(target_os = "windows") {
         todo!();
