@@ -18,6 +18,9 @@ pub struct PatchSpecification {
     in_file: PathBuf,
     out_file: PathBuf,
     temp_folder: PathBuf,
+
+    extract_xiso_path: PathBuf,
+
     entries: Vec<PatchEntry>,
     force_reextract: bool,
 }
@@ -30,6 +33,7 @@ impl PatchSpecification {
             temp_folder: Default::default(),
             entries: Vec::new(),
             force_reextract: app.force_reextract,
+            extract_xiso_path: Default::default(),
         };
 
         for loaded_set in app.loaded_patch_sets() {
@@ -48,6 +52,8 @@ impl PatchSpecification {
 
         spec.in_file = PathBuf::from(&app.input_iso_path);
         spec.out_file = PathBuf::from(&app.output_iso_path);
+
+        spec.extract_xiso_path = PathBuf::from(&app.extract_xiso_path);
 
         spec.temp_folder = match &app.temp_path {
             Some(t) => t.clone(),
@@ -71,6 +77,10 @@ impl PatchSpecification {
 
     pub fn entries(&self) -> &[PatchEntry] {
         &self.entries
+    }
+
+    pub fn extract_xiso_path(&self) -> &PathBuf {
+        &self.extract_xiso_path
     }
 }
 
@@ -143,7 +153,11 @@ pub fn patch_iso_thread(ctx_lock: Arc<RwLock<ThreadContext>>, spec: PatchSpecifi
     if !extraction_path.exists() {
         ctx_print(&ctx_lock, "Extracting the iso...".to_string());
 
-        match iso_handling::extract_iso(&spec.in_file, &extraction_path) {
+        match iso_handling::extract_iso(
+            &spec.extract_xiso_path.as_path(),
+            &spec.in_file,
+            &extraction_path,
+        ) {
             Ok(_) => (),
             Err(e) => {
                 ctx_error(&ctx_lock, format!("\nError during ISO extraction.\n{}", e));
@@ -241,7 +255,11 @@ pub fn patch_iso_thread(ctx_lock: Arc<RwLock<ThreadContext>>, spec: PatchSpecifi
         format!("Constructing new iso at {}", spec.out_file.display()),
     );
 
-    match iso_handling::create_iso(&spec.out_file, &extraction_path) {
+    match iso_handling::create_iso(
+        &spec.extract_xiso_path.as_path(),
+        &spec.out_file,
+        &extraction_path,
+    ) {
         Ok(_) => {
             ctx_print(
                 &ctx_lock,

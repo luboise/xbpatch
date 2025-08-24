@@ -68,6 +68,7 @@ struct XBPatchApp {
     iso_finder: Option<PathBuf>,
 
     cwd_path: PathBuf,
+    extract_xiso_path: String,
 
     temp_path: Option<PathBuf>,
     temp_path_valid: bool,
@@ -113,6 +114,8 @@ impl Default for XBPatchApp {
 
             input_iso_path: Default::default(),
             input_iso_status: ISOStatus::Unknown,
+
+            extract_xiso_path: "extract-xiso".to_string(),
 
             output_iso_path: Default::default(),
             output_iso_status: ISOStatus::Unknown,
@@ -307,12 +310,14 @@ impl XBPatchApp {
 
 Input ISO: {}
 Output ISO: {}
+extract-xiso path: {}
 Temp Directory: {}
 \n
 Patches:
 {}",
                         &spec.in_file().display(),
                         &spec.out_file().display(),
+                        &spec.extract_xiso_path().display(),
                         &spec.temp_dir().display(),
                         &spec
                             .entries()
@@ -694,6 +699,14 @@ impl eframe::App for XBPatchApp {
                     }
                 });
             });
+
+            ui.horizontal(|ui| {
+                ui.heading("extract-xiso Path");
+                ui.group(|ui| {
+                     ui.add(egui::TextEdit::singleline(&mut self.extract_xiso_path));
+                });
+            });
+
             ui.horizontal(|ui| {
                 match self.temp_path_valid {
                     true => {
