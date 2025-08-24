@@ -1,11 +1,10 @@
 use std::{env, io::Write, path::PathBuf};
 
 use xbpatch_core::{
+    iso_handling,
     patching::{Patch, PatchEntry, PatchOffsetType},
     xbe::{PatchReport, XBEWriter},
 };
-
-mod commands;
 
 use walkdir::WalkDir;
 
@@ -73,7 +72,7 @@ fn main() {
     if !extraction_dir.exists() {
         std::fs::create_dir_all(&extraction_dir).expect("Unable to create xbpatch dir.");
 
-        commands::extract_iso(&iso, &extraction_dir);
+        iso_handling::extract_iso(&iso, &extraction_dir);
     }
 
     // Grab default.xbe out of it
@@ -168,7 +167,7 @@ fn main() {
             &iso_path.as_os_str().to_str().unwrap()
         );
 
-        match commands::create_iso(&iso_path, &extraction_dir) {
+        match iso_handling::create_iso(&iso_path, &extraction_dir) {
             Ok(_) => (),
             Err(e) => error_exit_with_details("Unable to create iso", e.to_string()),
         };

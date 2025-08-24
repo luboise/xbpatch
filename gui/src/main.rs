@@ -39,13 +39,16 @@ enum ISOStatus {
 #[derive(PartialEq)]
 enum XBPatchAppStatus {
     Startup,
-    Patching,
     Normal,
     NeedReload,
     GettingNewPatchSetName,
     DeletionPrompt,
     SelectedInputISO,
+
+    // Patch related
     ConfirmingPatch,
+    Patching,
+    CompletedPatch,
 }
 
 struct XBPatchApp {
@@ -317,6 +320,7 @@ Patches:
             XBPatchAppStatus::Patching => {
                 println!("Do the patch here.");
             }
+            XBPatchAppStatus::CompletedPatch => todo!(),
         };
     }
 
