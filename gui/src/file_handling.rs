@@ -85,9 +85,6 @@ impl LoadedPatchSet {
     pub fn data(&self) -> &PatchSet {
         &self.patch_set
     }
-    pub fn data_mut(&mut self) -> &mut PatchSet {
-        &mut self.patch_set
-    }
 }
 
 pub struct LiveFile<T>

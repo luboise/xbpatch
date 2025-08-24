@@ -7,13 +7,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use eframe::egui::{self, Color32, Id, Modal, TextEdit, warn_if_debug_build};
+use eframe::egui::{self, Color32, Id, Modal, TextEdit};
 use egui_file::FileDialog;
 
-use crate::file_handling::LoadedPatchSet;
-
 mod file_handling;
+use crate::{file_handling::LoadedPatchSet, patching::PatchSpecification};
+
 mod modals;
+mod patching;
 
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
@@ -38,11 +39,13 @@ enum ISOStatus {
 #[derive(PartialEq)]
 enum XBPatchAppStatus {
     Startup,
+    Patching,
     Normal,
     NeedReload,
     GettingNewPatchSetName,
     DeletionPrompt,
     SelectedInputISO,
+    ConfirmingPatch,
 }
 
 struct XBPatchApp {
@@ -51,11 +54,18 @@ struct XBPatchApp {
     iso_finder_dialog: Option<FileDialog>,
     iso_finder: Option<PathBuf>,
 
+    cwd_path: PathBuf,
+
+    temp_path: Option<PathBuf>,
+    temp_path_valid: bool,
+    temp_input_str: String,
+
     input_iso_path: String,
     input_iso_status: ISOStatus,
-
     output_iso_path: String,
     output_iso_status: ISOStatus,
+
+    patch_specification: Option<PatchSpecification>,
 
     patch_sets_path: Option<PathBuf>,
     loaded_patches: Vec<LoadedPatchSet>,
@@ -76,11 +86,19 @@ impl Default for XBPatchApp {
 
         Self {
             status: XBPatchAppStatus::Startup,
-            // ISO files
+            // Paths
+            cwd_path: std::env::current_dir().unwrap_or_default(),
+
+            temp_path: Default::default(),
+            temp_input_str: Default::default(),
+            temp_path_valid: false,
+
             input_iso_path: Default::default(),
             input_iso_status: ISOStatus::Unknown,
+
             output_iso_path: Default::default(),
             output_iso_status: ISOStatus::Unknown,
+
             // Patch set folder
             patch_sets_path,
             loaded_patches: Vec::new(),
@@ -88,11 +106,24 @@ impl Default for XBPatchApp {
             modal_input: String::new(),
             iso_finder_dialog: None,
             iso_finder: None,
+            patch_specification: None,
         }
     }
 }
 
 impl XBPatchApp {
+    pub fn set_temp_directory(&mut self, str: &str) {
+        let path: PathBuf = str.into();
+
+        if path.is_dir() {
+            self.temp_path = Some(path);
+            self.temp_path_valid = true;
+        } else {
+            self.temp_path = None;
+            self.temp_path_valid = false;
+        }
+    }
+
     pub fn update_state(&mut self, ctx: &egui::Context) {
         match self.status {
             XBPatchAppStatus::Startup => {
@@ -108,9 +139,29 @@ impl XBPatchApp {
                     self.reload_patch_sets();
                 }
 
+                match env::current_dir() {
+                    Ok(dir) => {
+                        self.cwd_path = dir;
+                        self.temp_input_str = self
+                            .cwd_path
+                            .join("xbpatch_temp")
+                            .as_os_str()
+                            .to_str()
+                            .unwrap_or_default()
+                            .to_string();
+
+                        let new_temp = &self.temp_input_str.clone();
+                        self.set_temp_directory(new_temp);
+                    }
+                    Err(_) => {
+                        eprintln!("Unable to fetch current working directory.");
+                    }
+                };
+
                 self.status = XBPatchAppStatus::Normal
             }
             XBPatchAppStatus::NeedReload => {
+                // TODO: Handle failure here
                 self.reload_patch_sets();
                 self.status = XBPatchAppStatus::Normal;
             }
@@ -226,6 +277,18 @@ impl XBPatchApp {
 
                 self.status = XBPatchAppStatus::Normal;
             }
+            XBPatchAppStatus::ConfirmingPatch => {
+                let text =
+                    "Are you sure you would like to patch the iso with these options?".into();
+                modals::ask_user(ctx, "confirm_patch", &text, |b| {
+                    if b {
+                        self.status = XBPatchAppStatus::Patching
+                    }
+                });
+            }
+            XBPatchAppStatus::Patching => {
+                println!("Do the patch here.");
+            }
         };
     }
 
@@ -297,6 +360,23 @@ impl XBPatchApp {
         };
 
         Ok(())
+    }
+
+    pub fn create_patch_spec(&self) -> Result<PatchSpecification, Box<dyn std::error::Error>> {
+        let spec = PatchSpecification::from_xbpatchapp(self)?;
+        Ok(spec)
+    }
+
+    fn loaded_patch_sets(&self) -> &[LoadedPatchSet] {
+        &self.loaded_patches
+    }
+
+    fn status(&self) -> &XBPatchAppStatus {
+        &self.status
+    }
+
+    fn status_mut(&mut self) -> &mut XBPatchAppStatus {
+        &mut self.status
     }
 }
 
@@ -509,6 +589,53 @@ impl eframe::App for XBPatchApp {
 
                 ui.colored_label(color, text);
             });
+
+            ui.horizontal(|ui| {
+                ui.heading("Temp Directory");
+                ui.group(|ui| {
+                    if ui
+                        .add(egui::TextEdit::singleline(&mut self.temp_input_str))
+                        .changed()
+                    {
+                        let str = self.temp_input_str.clone();
+                        self.set_temp_directory(&str);
+                    }
+                });
+            });
+            ui.horizontal(|ui| {
+                match self.temp_path_valid {
+                    true => {
+                        ui.colored_label(egui::Color32::GREEN, "Temp directory valid.");
+                    }
+                    false => {
+                        ui.colored_label(egui::Color32::RED, "Unable to validate temp directory");
+                        if ui.button("Create Temp Dir").clicked() {
+                            let path: PathBuf = self.temp_input_str.clone().into();
+                            match std::fs::create_dir_all(&path) {
+                                Ok(_) => {
+                                    let str = self.temp_input_str.clone();
+
+                                    self.set_temp_directory(&str);
+                                }
+
+                                Err(e) => {
+                                    eprintln!(
+                                        "Unable to create temp directory at {}\nError: {}.",
+                                        &path.display(),
+                                        e
+                                    );
+                                }
+                            };
+                        }
+                    }
+                };
+            });
+
+            if ui.button("Patch").clicked() {
+                if self.status == XBPatchAppStatus::Normal {
+                    let patch_spec = self.create_patch_spec();
+                }
+            };
         });
     }
 }
