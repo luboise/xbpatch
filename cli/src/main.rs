@@ -46,6 +46,9 @@ fn main() {
         },
     };
 
+    // TODO: Make this a program argument
+    let extract_xiso_path = PathBuf::from("extract-xiso");
+
     // Extract the ISO
     let iso: PathBuf = args.iso_path.take().expect("Expected an iso path.");
 
@@ -72,7 +75,7 @@ fn main() {
     if !extraction_dir.exists() {
         std::fs::create_dir_all(&extraction_dir).expect("Unable to create xbpatch dir.");
 
-        iso_handling::extract_iso(&iso, &extraction_dir);
+        iso_handling::extract_iso(&extract_xiso_path, &iso, &extraction_dir);
     }
 
     // Grab default.xbe out of it
@@ -167,7 +170,7 @@ fn main() {
             &iso_path.as_os_str().to_str().unwrap()
         );
 
-        match iso_handling::create_iso(&iso_path, &extraction_dir) {
+        match iso_handling::create_iso(&extract_xiso_path, &iso_path, &extraction_dir) {
             Ok(_) => (),
             Err(e) => error_exit_with_details("Unable to create iso", e.to_string()),
         };
