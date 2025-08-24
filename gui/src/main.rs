@@ -278,13 +278,41 @@ impl XBPatchApp {
                 self.status = XBPatchAppStatus::Normal;
             }
             XBPatchAppStatus::ConfirmingPatch => {
-                let text =
-                    "Are you sure you would like to patch the iso with these options?".into();
-                modals::ask_user(ctx, "confirm_patch", &text, |b| {
-                    if b {
-                        self.status = XBPatchAppStatus::Patching
-                    }
-                });
+                if let Some(spec) = &self.patch_specification {
+                    let text = format!(
+                        "Are you sure you would like to patch the iso with the following options:
+
+Input ISO: {}
+Output ISO: {}
+Temp Directory: {}
+\n
+Patches:
+{}",
+                        &spec.in_file().display(),
+                        &spec.out_file().display(),
+                        &spec.temp_dir().display(),
+                        &spec
+                            .entries()
+                            .iter()
+                            .map(|e| { format!("- {}", e.name()) })
+                            .collect::<Vec<String>>()
+                            .join("\n")
+                    );
+
+                    modals::ask_user(ctx, "confirm_patch", &text, |b| {
+                        if b {
+                            self.status = XBPatchAppStatus::Patching
+                        } else {
+                            self.status = XBPatchAppStatus::Normal;
+                            self.patch_specification.take(); // Clears the spec
+                        }
+                    });
+                } else {
+                    let error_msg = "No patch specification is available for patching.".to_string();
+                    modals::error_prompt(ctx, "no_patch_spec_error", &error_msg, || {
+                        self.status = XBPatchAppStatus::Normal;
+                    });
+                }
             }
             XBPatchAppStatus::Patching => {
                 println!("Do the patch here.");
@@ -566,13 +594,6 @@ impl eframe::App for XBPatchApp {
                         }
                     }
                 });
-            });
-
-            ui.horizontal(|ui| {
-                ui.heading("Output ISO");
-                ui.group(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut self.output_iso_path));
-                });
 
                 let color = match self.input_iso_status {
                     ISOStatus::Valid => egui::Color32::GREEN,
@@ -588,6 +609,13 @@ impl eframe::App for XBPatchApp {
                 };
 
                 ui.colored_label(color, text);
+            });
+
+            ui.horizontal(|ui| {
+                ui.heading("Output ISO");
+                ui.group(|ui| {
+                    ui.add(egui::TextEdit::singleline(&mut self.output_iso_path));
+                });
             });
 
             ui.horizontal(|ui| {
@@ -633,7 +661,15 @@ impl eframe::App for XBPatchApp {
 
             if ui.button("Patch").clicked() {
                 if self.status == XBPatchAppStatus::Normal {
-                    let patch_spec = self.create_patch_spec();
+                    match self.create_patch_spec() {
+                        Ok(ps) => {
+                            self.patch_specification = Some(ps);
+                            self.status = XBPatchAppStatus::ConfirmingPatch;
+                        }
+                        Err(e) => {
+                            eprintln!("Unable to create patch spec.\nError: {}", e);
+                        }
+                    };
                 }
             };
         });

@@ -46,7 +46,22 @@ impl PatchSpecification {
         spec.temp_folder =
             std::env::current_dir().unwrap_or(dirs_next::home_dir().unwrap().join("xbpatch_temp"));
 
-        dbg!(&spec);
         Ok(spec)
+    }
+
+    pub fn in_file(&self) -> &PathBuf {
+        &self.in_file
+    }
+
+    pub fn out_file(&self) -> &PathBuf {
+        &self.out_file
+    }
+
+    pub fn temp_dir(&self) -> &PathBuf {
+        &self.temp_folder
+    }
+
+    pub fn entries(&self) -> &[PatchEntry] {
+        &self.entries
     }
 }
