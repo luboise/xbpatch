@@ -359,7 +359,13 @@ Patches:
                             finished = ctx.completed();
                         }
 
-                        ui.add(TextEdit::multiline(&mut str).interactive(false));
+                        egui::ScrollArea::vertical()
+                            .max_width(1000.0)
+                            .max_height(800.0)
+                            .auto_shrink(true)
+                            .show(ui, |ui| {
+                                ui.add(TextEdit::multiline(&mut str).interactive(false));
+                            });
 
                         ui.horizontal(|ui| {
                             // if ui.button("Cancel").clicked() {
