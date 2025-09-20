@@ -1,0 +1,199 @@
+{
+  "xbpatchset_schema": 0,
+  "name": "ghoulies",
+  "author": "hethan/rectangle",
+  "version_major": 1,
+  "version_minor": 0,
+  "game_title": "Grabbed by the Ghoulies",
+  "entries": [
+    {
+      "name": "Uncap frame rate",
+      "description": "Disables vertical sync, allowing the game to reach as high a frame rate as hardware will allow.",
+      "patches": [
+        {
+          "offset": "0x154919",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0xeb21"
+        }
+      ]
+    },
+    {
+      "name": "Force 4:3 Aspect Ratio (Default)",
+      "description": "Adjusts the aspect ratio used during 2d sequences.",
+      "patches": [
+        {
+          "offset": "0x5077f8",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0x00"
+        }
+      ]
+    },
+    {
+      "name": "Force 16:9 Aspect Ratio",
+      "description": "Adjusts the aspect ratio used during 2d sequences. The 16:9 option makes the pause screen and cutscenes work like Rare Replay.",
+      "patches": [
+        {
+          "offset": "0x5077f8",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0x01"
+        }
+      ]
+    },
+    {
+      "name": "Force 2.35:1 Aspect Ratio",
+      "description": "Adjusts the aspect ratio used during 2d sequences.",
+      "patches": [
+        {
+          "offset": "0x5077f8",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0x02"
+        }
+      ]
+    },
+
+    {
+      "name": "Prevent cutscene camera",
+      "description": "Prevents the camera from moving during cutscenes??? (Need to double check this one)",
+      "patches": [
+        {
+          "offset": "0x4ecf9",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0xeb"
+        }
+      ]
+    },
+    {
+      "name": "Disable challenge pre-door cutscene camera switches",
+      "description": "Disables camera switches when a challenge begins. Doesn't save any time, but can be nice when combined with force 1.2s cutscenes.",
+      "patches": [
+        {
+          "offset": "0x4ee4a",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0x9090909090"
+        }
+      ]
+    },
+    {
+      "name": "Disable door camera switch",
+      "description": "Prevent the camera from focusing doors during cutscenes.",
+      "patches": [
+        {
+          "offset": "0x5bfc6",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0x9090909090"
+        }
+      ]
+    },
+    {
+      "name": "Disable celebrations",
+      "description": "Prevents all actors from using the \"celebrate\" strategy. This can save time from now showing celebration cutscenes after completing challenges, but can affect ghoulie behaviour.",
+      "patches": [
+        {
+          "offset": "0x2bb36",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0x9090909090"
+        }
+      ]
+    },
+
+    {
+      "name": "Prevent player walking to set destinations",
+      "description": "Prevents cooper from being forced to walk to specific positions in the game world. This has the largest effect during cutscenes.",
+      "patches": [
+        {
+          "offset": "0xbee86",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0x909090"
+        }
+      ]
+    },
+    {
+      "name": "Prevent energy sapper",
+      "description": "Prevents energy sappers from affecting the player.",
+      "patches": [
+        {
+          "offset": "0x75cf5",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0x909090905e"
+        }
+      ]
+    },
+    {
+      "name": "Disable all challenges (guaranteed softlock)",
+      "description": "Prevents challenges from being added to the challenge list within rooms. The cutscene where challenges begin will still play, but the challenges will not be given to the player.",
+      "patches": [
+        {
+          "offset": "0xd05d0",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0xc3"
+        }
+      ]
+    },
+
+    {
+      "name": "World of Warcraft camera",
+      "description": "Makes the camera stiff and bound to the player, following them similarly to the WoW camera.",
+      "patches": [
+        {
+          "offset": "0x7ff1c",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0x9090"
+        }
+      ]
+    },
+    {
+      "name": "Force 1sec cutscenes (BROKEN)",
+      "description": "Force all cutscenes to have a length of 1 second. This can notably cause many ghoulies to become stuck in walls and software many parts of the game, particularly relic store.",
+      "patches": [
+        {
+          "offset": "0x4d5ac",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0x909090909090"
+        }
+      ]
+    },
+    {
+      "name": "Force 1.2sec cutscenes (PARTIALLY BROKEN)",
+      "description": "Force all cutscenes to have a length of 1.2 seconds. This fixes a majority of the rooms which break with a 1 second cutscene, but does NOT fix relic store.",
+      "patches": [
+        {
+          "offset": "0x4d5ac",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0xe85076fcff"
+        },
+        {
+          "offset": "0x14c01",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0xf30f100d32690100c3"
+        }
+      ]
+    },
+    {
+      "name": "Remove Relic Store RNG",
+      "description": "Forces relic store so use the first available coffin instead of randomly choosing one.",
+      "patches": [
+        {
+          "offset": "0x81454",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0x9090909090909090"
+        }
+      ]
+    },
+    {
+      "name": "Disable reaper spawn",
+      "description": "Prevent the grim reaper from spawning when a challenge has been failed.",
+      "patches": [
+        {
+          "offset": "0xd0d50",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0x9090909090"
+        },
+        {
+          "offset": "0xd0dda",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0x9090909090"
+        }
+      ]
+    }
+  ]
+}
