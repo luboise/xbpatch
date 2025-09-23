@@ -194,6 +194,28 @@
           "replacement_bytes": "0x9090909090"
         }
       ]
+    },
+    {
+      "name": "Invis mode",
+      "description": "Makes all non-background items invisible. This includes the player, all ghoulies, powerups, etc.",
+      "patches": [
+        {
+          "offset": "0x121ba1",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0x00"
+        }
+      ]
+    },
+    {
+      "name": "TRUE dark mode",
+      "description": "Skip the drawing of all non-fx objects.",
+      "patches": [
+        {
+          "offset": "0x15aec5",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0x9090"
+        }
+      ]
     }
   ]
 }
