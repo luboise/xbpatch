@@ -15,14 +15,14 @@ pub fn extract_iso(
     }
 
     // If the folder doesn't exist (or the user just deleted it), then extract the game
-    let mut extractor = Command::new(&extract_xiso_path)
+    let mut extractor = Command::new(extract_xiso_path)
         .arg("-x")
-        .arg(&iso_path)
+        .arg(iso_path)
         .arg("-d")
-        .arg(&extraction_path)
+        .arg(extraction_path)
         .stdout(Stdio::piped())
-        .spawn()
-        .expect("Failed to start extract-xiso");
+        .spawn()?;
+    // .expect("Failed to start extract-xiso");
 
     // .expect("Failed to start extract-xiso");
 

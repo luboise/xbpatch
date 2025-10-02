@@ -114,17 +114,17 @@ pub fn patch_iso_thread(ctx_lock: Arc<RwLock<ThreadContext>>, spec: PatchSpecifi
     let ctx_print = |ctx_lock: &Arc<RwLock<ThreadContext>>, message: String| {
         let mut ctx = ctx_lock.write().unwrap();
 
-        ctx.log.push_str("\n");
+        ctx.log.push('\n');
         ctx.log.push_str(message.as_ref());
     };
 
     let ctx_error = |ctx_lock: &Arc<RwLock<ThreadContext>>, msg: String| {
-        ctx_print(&ctx_lock, msg);
+        ctx_print(ctx_lock, msg);
 
         let mut ctx = ctx_lock.write().unwrap();
         ctx.log.push_str("\n\nPatching failed.");
         ctx.completed = false;
-        ctx.error = false;
+        ctx.error = true;
     };
 
     ctx_print(
@@ -154,7 +154,7 @@ pub fn patch_iso_thread(ctx_lock: Arc<RwLock<ThreadContext>>, spec: PatchSpecifi
         ctx_print(&ctx_lock, "Extracting the iso...".to_string());
 
         match iso_handling::extract_iso(
-            &spec.extract_xiso_path.as_path(),
+            spec.extract_xiso_path.as_path(),
             &spec.in_file,
             &extraction_path,
         ) {
@@ -231,7 +231,10 @@ pub fn patch_iso_thread(ctx_lock: Arc<RwLock<ThreadContext>>, spec: PatchSpecifi
             Err(e) => {
                 ctx_error(
                     &ctx_lock,
-                    String::from("A critical error occurred applying patches. Unable to continue."),
+                    format!(
+                        "A critical error occurred applying patches. Unable to continue. Error: {}",
+                        e,
+                    ),
                 );
                 return;
             }
@@ -256,7 +259,7 @@ pub fn patch_iso_thread(ctx_lock: Arc<RwLock<ThreadContext>>, spec: PatchSpecifi
     );
 
     match iso_handling::create_iso(
-        &spec.extract_xiso_path.as_path(),
+        spec.extract_xiso_path.as_path(),
         &spec.out_file,
         &extraction_path,
     ) {
@@ -273,7 +276,7 @@ pub fn patch_iso_thread(ctx_lock: Arc<RwLock<ThreadContext>>, spec: PatchSpecifi
             );
         }
         Err(e) => {
-            ctx_error(&ctx_lock, String::from("Failed to create iso."));
+            ctx_error(&ctx_lock, format!("Failed to create iso. Error: {}", e));
             return;
         }
     };
