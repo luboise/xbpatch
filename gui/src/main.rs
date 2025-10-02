@@ -355,13 +355,13 @@ Patches:
                     .show(ctx, |ui| {
                         ui.heading("Patch Progress");
 
-                        let mut str: String = Default::default();
-                        let mut finished = false;
+                        let mut string;
+                        let finished;
 
                         {
                             let ctx = self.thread_context.read().unwrap();
-                            str = String::from(ctx.log());
-                            finished = ctx.completed();
+                            string = String::from(ctx.log());
+                            finished = ctx.completed() || ctx.error();
                         }
 
                         egui::ScrollArea::vertical()
@@ -369,7 +369,7 @@ Patches:
                             .max_height(800.0)
                             .auto_shrink(true)
                             .show(ui, |ui| {
-                                ui.add(TextEdit::multiline(&mut str).interactive(false));
+                                ui.add(TextEdit::multiline(&mut string).interactive(false));
                             });
 
                         ui.horizontal(|ui| {

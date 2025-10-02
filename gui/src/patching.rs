@@ -99,6 +99,10 @@ impl ThreadContext {
     pub fn completed(&self) -> bool {
         self.completed
     }
+
+    pub fn error(&self) -> bool {
+        self.error
+    }
 }
 
 pub fn patch_iso_thread(ctx_lock: Arc<RwLock<ThreadContext>>, spec: PatchSpecification) {
