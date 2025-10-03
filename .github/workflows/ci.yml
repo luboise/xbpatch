@@ -6,6 +6,9 @@ on:
     tags:
       - "v*.*.*" # eg v1.0.0, v2.1.5
 
+permissions:
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
 
