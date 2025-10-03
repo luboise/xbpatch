@@ -2,11 +2,11 @@ name: Rust
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
     tags:
-      - 'v*.*.*' # eg v1.0.0, v2.1.5
+      - "v*.*.*" # eg v1.0.0, v2.1.5
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,26 +16,39 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        BUILD_TARGET: [release] # refers to a cargo profile
-    steps:
-    - uses: actions/checkout@v5
-    - name: Build binaries in "${{ matrix.BUILD_TARGET }}" mode
-      run: cargo build --profile ${{ matrix.BUILD_TARGET }}
-    - name: Run tests in "${{ matrix.BUILD_TARGET }}" mode
-      run: cargo test --profile ${{ matrix.BUILD_TARGET }}
-    - name: Clone repo
-    - uses: actions/checkout@v4
-    - name: Cache
-    - uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}  
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+        BUILD_TARGET: [release]
+
     outputs:
       release_built: ${{ steps.set-output.outputs.release_built }}
+
+    steps:
+      - name: Clone Repo
+        uses: actions/checkout@v5
+      - name: Restore Cargo Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Temporarily modify the rust toolchain version
+        run: rustup override set stable
+      - name: Output rust version for educational purposes
+        run: rustup --version
+
+      - name: Build binaries in "${{ matrix.BUILD_TARGET }}" mode
+        run: cargo build --profile ${{ matrix.BUILD_TARGET }}
+      - name: Run tests in "${{ matrix.BUILD_TARGET }}" mode
+        run: cargo test --profile ${{ matrix.BUILD_TARGET }}
+      - name: Copy Default Patch Sets
+        run: mkdir -p "target/${{ matrix.BUILD_TARGET }}/data/" && cp example/ghoulies.json "target/${{ matrix.BUILD_TARGET }}/data/"
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xbpatch
+          path: |
+            target/${{ matrix.BUILD_TARGET }}/xbpatch-cli*
+            target/${{ matrix.BUILD_TARGET }}/xbpatch-gui*
+            target/${{ matrix.BUILD_TARGET }}/data/
