@@ -53,52 +53,51 @@ jobs:
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: xbpatch-${{ runner.os }}-${{ github.event.ref_name }}
+          name: xbpatch-${{ runner.os }}
           path: |
             target/${{ matrix.BUILD_TARGET }}/xbpatch-cli
             target/${{ matrix.BUILD_TARGET }}/xbpatch-cli.exe
             target/${{ matrix.BUILD_TARGET }}/xbpatch-gui
             target/${{ matrix.BUILD_TARGET }}/xbpatch-gui.exe
             target/${{ matrix.BUILD_TARGET }}/data/
-  # build-windows:
-  #   runs-on: windows-latest
-  #   strategy:
-  #     matrix:
-  #       BUILD_TARGET: [release]
-  #
-  #   outputs:
-  #     release_built: ${{ steps.set-output.outputs.release_built }}
-  #
-  #   steps:
-  #     - name: Clone Repo
-  #       uses: actions/checkout@v5
-  #     - name: Restore Cargo Cache
-  #       uses: actions/cache@v4
-  #       with:
-  #         path: |
-  #           ~/.cargo/registry
-  #           ~/.cargo/git
-  #           target
-  #         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-  #
-  #     - name: Temporarily modify the rust toolchain version
-  #       run: rustup override set stable
-  #     - name: Output rust version for educational purposes
-  #       run: rustup --version
-  #
-  #     - name: Build binaries in "${{ matrix.BUILD_TARGET }}" mode
-  #       run: cargo build --profile ${{ matrix.BUILD_TARGET }}
-  #     - name: Run tests in "${{ matrix.BUILD_TARGET }}" mode
-  #       run: cargo test --profile ${{ matrix.BUILD_TARGET }}
-  #
-  #     - name: Upload release artifact
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: xbpatch-${{ runner.os }}-${{ github.event.ref_name }}
-  #
-  #         path: |
-  #           target/${{ matrix.BUILD_TARGET }}/xbpatch-cli
-  #           target/${{ matrix.BUILD_TARGET }}/xbpatch-cli.exe
-  #           target/${{ matrix.BUILD_TARGET }}/xbpatch-gui
-  #           target/${{ matrix.BUILD_TARGET }}/xbpatch-gui.exe
-  #           target/${{ matrix.BUILD_TARGET }}/data/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create New Release
+        uses: actions/create-release@v1
+        id: create_release
+        with:
+          draft: false
+          prerelease: false
+          release_name: ${{ steps.version.outputs.version }}
+          tag_name: ${{ github.ref }}
+          body_path: CHANGELOG.md
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v5.0.0
+        with:
+          path: ~/artifacts
+
+      - name: Upload linux artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ~/artifacts/xbpatch-Linux.zip
+          asset_name: xbpatch-linux-${{ github.ref_name }}.zip
+          asset_content_type: application/gzip
+
+      - name: Upload Windows artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ~/artifacts/xbpatch-Windows.zip
+          asset_name: xbpatch-windows-${{ github.ref_name }}.zip
+          asset_content_type: application/zip
