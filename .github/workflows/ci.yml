@@ -68,7 +68,18 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Clear previous artifacts
+        run: |
+          mkdir -p artifacts
+          rm -f artifacts/*
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v5.0.0
+        with:
+          path: artifacts
+
       - name: Create release
+        id: create_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.ref_name }}
@@ -77,28 +88,24 @@ jobs:
               --repo="$GITHUB_REPOSITORY" \
               --title="${GITHUB_REPOSITORY#*/} ${tag#v}" \
               --generate-notes
+              artifacts/*
 
-      - name: Download Build Artifacts
-        uses: actions/download-artifact@v5.0.0
-        with:
-          path: ~/artifacts
-
-      - name: Upload linux artifact
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ~/artifacts/xbpatch-Linux.zip
-          asset_name: xbpatch-linux-${{ github.ref_name }}.zip
-          asset_content_type: application/gzip
-
-      - name: Upload Windows artifact
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ~/artifacts/xbpatch-Windows.zip
-          asset_name: xbpatch-windows-${{ github.ref_name }}.zip
-          asset_content_type: application/zip
+      # - name: Upload linux artifact
+      #   uses: actions/upload-release-asset@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ github.token }}
+      #   with:
+      #     upload_url: ${{ steps.create_release.outputs.upload_url }}
+      #     asset_path: ~/artifacts/xbpatch-Linux.zip
+      #     asset_name: xbpatch-linux-${{ github.ref_name }}.zip
+      #     asset_content_type: application/gzip
+      #
+      # - name: Upload Windows artifact
+      #   uses: actions/upload-release-asset@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ github.token }}
+      #   with:
+      #     upload_url: ${{ steps.create_release.outputs.upload_url }}
+      #     asset_path: ~/artifacts/xbpatch-Windows.zip
+      #     asset_name: xbpatch-windows-${{ github.ref_name }}.zip
+      #     asset_content_type: application/zip
