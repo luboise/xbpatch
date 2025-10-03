@@ -14,17 +14,12 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        toolchain: [stable, beta, nightly]
-
     steps:
     - uses: actions/checkout@v4
     - name: Install Rust toolchain
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: ${{ matrix.toolchain }}
+        toolchain: stable
         override: true
     - name: Build
       run: cargo build --verbose
