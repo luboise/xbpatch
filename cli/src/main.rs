@@ -1,7 +1,7 @@
 use std::{env, fs, io::Write, path::PathBuf};
 
 use xbpatch_core::{
-    iso_handling,
+    iso_handling::{self, backup_file, restore_backup},
     patching::{Patch, PatchEntry, PatchOffsetType},
     xbe::{PatchReport, XBEWriter},
 };
@@ -85,12 +85,17 @@ fn main() {
         None => error_exit("Unable to find default.xbe in the .iso files."),
     };
 
-    match backup_file(&xbe_path) {
-        Ok(b) => b,
-        Err(_) => {
-            error_exit("Unable to backup default.xbe");
-        }
-    };
+    if restore_backup(&xbe_path)
+        .expect("Failed to restore backup.")
+        .is_none()
+    {
+        match backup_file(&xbe_path) {
+            Ok(b) => b,
+            Err(_) => {
+                error_exit("Unable to backup default.xbe");
+            }
+        };
+    }
 
     // Parse the config
     let mut xbe_writer = match XBEWriter::new(&xbe_path) {
@@ -299,31 +304,4 @@ fn find_file_in_folder(file: PathBuf, folder: PathBuf) -> Option<PathBuf> {
     }
 
     None
-}
-
-// #[must_use]
-fn backup_file(filepath: &PathBuf) -> Result<PathBuf, std::io::Error> {
-    let mut new_filepath: PathBuf = filepath.clone();
-
-    if let Some(filename) = filepath.file_name() {
-        let mut backup_name = filename.to_os_string();
-        backup_name.push(".bak");
-        new_filepath.set_file_name(backup_name);
-
-        // Do not overwrite if it exists
-        // TODO: Make this an option or prompt to the user
-        if new_filepath.exists() {
-            println!("Restoring backup default.xbe...");
-            std::fs::copy(&new_filepath, filepath)?;
-            return Ok(new_filepath);
-        }
-
-        std::fs::copy(filepath, &new_filepath)?;
-        Ok(new_filepath)
-    } else {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "File has no filename",
-        ));
-    }
 }

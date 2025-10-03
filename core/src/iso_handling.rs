@@ -112,3 +112,56 @@ pub fn create_iso(
     Ok(())
 }
 
+// #[must_use]
+pub fn backup_file(filepath: &PathBuf) -> Result<PathBuf, std::io::Error> {
+    let mut new_filepath: PathBuf = filepath.clone();
+
+    if let Some(filename) = filepath.file_name() {
+        let mut backup_name = filename.to_os_string();
+        backup_name.push(".bak");
+        new_filepath.set_file_name(backup_name);
+
+        // Do not overwrite if it exists
+        // TODO: Make this an option or prompt to the user
+        if new_filepath.exists() {
+            println!("Restoring backup default.xbe...");
+            std::fs::copy(&new_filepath, filepath)?;
+            return Ok(new_filepath);
+        }
+
+        std::fs::copy(filepath, &new_filepath)?;
+        Ok(new_filepath)
+    } else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "File has no filename",
+        ));
+    }
+}
+
+// #[must_use]
+pub fn restore_backup(original_path: &PathBuf) -> Result<Option<PathBuf>, std::io::Error> {
+    let mut backup_path: PathBuf = original_path.clone();
+
+    if let Some(filename) = original_path.file_name() {
+        let mut backup_name = filename.to_os_string();
+        backup_name.push(".bak");
+        backup_path.set_file_name(backup_name);
+
+        // Do not overwrite if it exists
+        // TODO: Make this an option or prompt to the user
+        if !backup_path.exists() {
+            return Ok(None);
+        }
+
+        match std::fs::copy(&backup_path, original_path) {
+            Ok(_val) => Ok(Some(original_path.clone())),
+            Err(e) => Err(e),
+        }
+    } else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "File has no filename",
+        ));
+    }
+}

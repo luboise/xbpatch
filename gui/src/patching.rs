@@ -6,7 +6,7 @@ use std::{
 
 use walkdir::WalkDir;
 use xbpatch_core::{
-    iso_handling,
+    iso_handling::{self, backup_file, restore_backup},
     patching::PatchEntry,
     xbe::{PatchReport, XBEWriter},
 };
@@ -198,6 +198,16 @@ pub fn patch_iso_thread(ctx_lock: Arc<RwLock<ThreadContext>>, spec: PatchSpecifi
             xbe_path.display()
         ),
     );
+
+    if restore_backup(&xbe_path)
+        .expect("Failed to restore backup.")
+        .is_none()
+    {
+        match backup_file(&xbe_path) {
+            Ok(_) => (),
+            Err(e) => ctx_error(&ctx_lock, format!("Failed to backup file. Error: {}", e)),
+        };
+    }
 
     // Parse the config
     let mut xbe_writer = match XBEWriter::new(&xbe_path) {
