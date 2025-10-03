@@ -101,23 +101,23 @@ jobs:
       #         --title="${GITHUB_REPOSITORY#*/} ${tag#v}" \
       #         --generate-notes
       #         artifacts/*
-
-      - name: Upload Linux artifact
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: artifacts/xbpatch-Linux.zip
-          asset_name: xbpatch-linux-${{ github.ref_name }}.zip
-          asset_content_type: application/gzip
-
-      - name: Upload Windows artifact
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: artifacts/xbpatch-Windows.zip
-          asset_name: xbpatch-windows-${{ github.ref_name }}.zip
-          asset_content_type: application/zip
+      # TODO: Fix artifacts not uploading properly
+      # - name: Upload Linux artifact
+      #   uses: actions/upload-release-asset@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ github.token }}
+      #   with:
+      #     upload_url: ${{ steps.create_release.outputs.upload_url }}
+      #     asset_path: artifacts/xbpatch-Linux.zip
+      #     asset_name: xbpatch-linux-${{ github.ref_name }}.zip
+      #     asset_content_type: application/gzip
+      #
+      # - name: Upload Windows artifact
+      #   uses: actions/upload-release-asset@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ github.token }}
+      #   with:
+      #     upload_url: ${{ steps.create_release.outputs.upload_url }}
+      #     asset_path: artifacts/xbpatch-Windows.zip
+      #     asset_name: xbpatch-windows-${{ github.ref_name }}.zip
+      #     asset_content_type: application/zip
