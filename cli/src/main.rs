@@ -1,4 +1,4 @@
-use std::{env, io::Write, path::PathBuf};
+use std::{env, fs, io::Write, path::PathBuf};
 
 use xbpatch_core::{
     iso_handling,
@@ -75,7 +75,8 @@ fn main() {
     if !extraction_dir.exists() {
         std::fs::create_dir_all(&extraction_dir).expect("Unable to create xbpatch dir.");
 
-        iso_handling::extract_iso(&extract_xiso_path, &iso, &extraction_dir);
+        iso_handling::extract_iso(&extract_xiso_path, &iso, &extraction_dir)
+            .unwrap_or_else(|_| eprintln!("Failed to extract iso."));
     }
 
     // Grab default.xbe out of it

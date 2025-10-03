@@ -1,4 +1,5 @@
 use std::{
+    fs,
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -10,20 +11,21 @@ pub fn extract_iso(
     iso_path: &PathBuf,
     extraction_path: &PathBuf,
 ) -> Result<(), std::io::Error> {
+    let cwd = extraction_path.parent().unwrap();
+
     if !extraction_path.exists() {
-        std::fs::create_dir_all(extraction_path)?;
+        std::fs::create_dir_all(&cwd)?;
     }
 
     // If the folder doesn't exist (or the user just deleted it), then extract the game
     let mut extractor = Command::new(extract_xiso_path)
+        .current_dir(cwd)
         .arg("-x")
         .arg(iso_path)
-        .arg("-d")
-        .arg(extraction_path)
+        // .arg("-d")
+        // .arg(extraction_path)
         .stdout(Stdio::piped())
         .spawn()?;
-    // .expect("Failed to start extract-xiso");
-
     // .expect("Failed to start extract-xiso");
 
     let estd = extractor.stdout.take().ok_or(std::io::Error::new(
@@ -45,6 +47,26 @@ pub fn extract_iso(
     // .expect("Failed to wait on extract-xiso");
     reader.join();
     // .expect("Unable to join reader thread.");
+
+    // #[cfg(target_family = "windows")]
+    // {
+    //     let iso_basename = iso_path
+    //         .file_stem()
+    //         .expect("Unable to get basename from iso.");
+
+    //     let from_dir = cwd.join(iso_basename);
+    //     let to_dir = extraction_path;
+
+    //     println!(
+    //         "\n\nCopying from {} to {}",
+    //         from_dir.display(),
+    //         to_dir.display()
+    //     );
+
+    //     fs::copy(from_dir, to_dir).map_err(|e| {
+    //         std::io::Error::other(format!("Failed to extract folder. Error: {}", e))
+    //     })?;
+    // }
 
     Ok(())
 }
@@ -89,3 +111,4 @@ pub fn create_iso(
 
     Ok(())
 }
+

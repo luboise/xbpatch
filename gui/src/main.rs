@@ -162,7 +162,8 @@ impl XBPatchApp {
                 );
                 if self.loaded_patches.is_empty() {
                     // TODO: Handle failure here
-                    self.reload_patch_sets();
+                    self.reload_patch_sets()
+                        .unwrap_or_else(|_| eprintln!("Failed to reload patch sets."));
                 }
 
                 match env::current_dir() {
