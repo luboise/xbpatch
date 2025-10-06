@@ -216,6 +216,51 @@
           "replacement_bytes": "0x9090"
         }
       ]
+    },
+
+    {
+      "name": "Randomise replay scene",
+      "description": "Randomise which scene you get every time you pick a scene",
+      "patches": [
+        {
+          "offset": "0xe4e59",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0xe81f42290090"
+        }
+      ]
+    },
+    {
+      "name": "Randomise replay scene 2",
+      "description": "Randomise which scene you get every time you pick a scene",
+      "patches": [
+        {
+          "offset": "0x37907d",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0x8b0d7cdd540081e1ffff7f006bc964c1e917c3"
+        }
+      ]
+    },
+    {
+      "name": "Speedhack 2.5x",
+      "description": "Make all events run at 2.5x speed.",
+      "patches": [
+        {
+          "offset": "0x11c7e1",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0xacb20700"
+        }
+      ]
+    },
+    {
+      "name": "Speedhack 4.0x",
+      "description": "Make all events run at 4.0x speed.",
+      "patches": [
+        {
+          "offset": "0x11c7e1",
+          "offset_type": "Virtual",
+          "replacement_bytes": "0xe0090800"
+        }
+      ]
     }
   ]
 }

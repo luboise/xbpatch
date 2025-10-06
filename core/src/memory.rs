@@ -54,14 +54,6 @@ impl MemoryMapping {
 mod tests {
     use crate::memory::{MemoryMap, MemoryMapping};
 
-    #[test]
-    fn get_raw_address_tests() -> Result<(), String> {
-        let mem = get_test_mem_map();
-
-        assert_eq!(mem.get_raw_offset(0x4d5ac).unwrap(), 0x3d5ac);
-        Ok(())
-    }
-
     fn get_test_mem_map() -> MemoryMap {
         MemoryMap {
             mappings: vec![
@@ -78,4 +70,28 @@ mod tests {
             ],
         }
     }
+
+    #[test]
+    fn get_raw_address_tests() -> Result<(), String> {
+        let mem = get_test_mem_map();
+
+        assert_eq!(mem.get_raw_offset(0x4d5ac).unwrap(), 0x3d5ac);
+        Ok(())
+    }
+
+    #[test]
+    fn test_dottext_patch() -> Result<(), String> {
+        let mem = get_test_mem_map();
+
+        assert_eq!(mem.get_raw_offset(0x11c7e1).unwrap(), 0x10c7e1);
+        Ok(())
+    }
+
+    /*
+          {
+      "offset": "0x11c7e1",
+      "offset_type": "Virtual",
+      "replacement_bytes": "0xac2b0700"
+    },
+    */
 }
