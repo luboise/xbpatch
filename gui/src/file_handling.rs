@@ -5,24 +5,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use xbpatch_core::patching::PatchEntry;
-
-#[derive(Serialize, Deserialize, Clone, Default, Debug)]
-pub struct PatchSet {
-    pub xbpatchset_schema: u32,
-    pub name: String,
-    pub author: String,
-    pub version_major: u8,
-    pub version_minor: u8,
-    pub game_title: String,
-    pub entries: Vec<PatchEntry>,
-}
-
-impl PatchSet {
-    pub fn len(&self) -> usize {
-        self.entries.len()
-    }
-}
+use xbpatch_core::patching::{PatchEntry, PatchSet, PatchSetV0};
 
 pub struct LoadedPatchSet {
     file: LiveFile<PatchSet>,
@@ -45,8 +28,8 @@ impl LoadedPatchSet {
     }
 
     pub fn existing(path: &PathBuf) -> Result<Self, std::io::Error> {
-        let file = LiveFile::<PatchSet>::from_existing(path)?;
-        let patch_set: PatchSet = file.data().clone();
+        let file = LiveFile::<PatchSetV0>::from_existing(path)?;
+        let patch_set: PatchSetV0 = file.data().clone();
 
         Ok(LoadedPatchSet {
             file,
@@ -56,7 +39,7 @@ impl LoadedPatchSet {
     }
 
     pub fn create_new(name: String, path: &PathBuf) -> Result<Self, std::io::Error> {
-        let mut file = LiveFile::<PatchSet>::from_new(path, PatchSet::default())?;
+        let mut file = LiveFile::<PatchSetV0>::from_new(path, PatchSetV0::default())?;
 
         file.update(|ps| {
             ps.name = name;
@@ -82,7 +65,7 @@ impl LoadedPatchSet {
         self.file.path()
     }
 
-    pub fn data(&self) -> &PatchSet {
+    pub fn data(&self) -> &PatchSetV0 {
         &self.patch_set
     }
 }

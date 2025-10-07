@@ -4,10 +4,86 @@ pub mod serialization;
 
 use serialization::*;
 
+mod version0;
+pub use version0::*;
+
+pub(crate) mod param;
+
+mod version1;
+pub use version1::*;
+
+use crate::patching::param::Parameter;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum PatchOffsetType {
     Raw,
     Virtual,
+}
+
+pub trait HasPatches {
+    fn add_patch(&mut self, patch: Patch);
+    fn get_patches(&self) -> &Vec<Patch>;
+
+    fn set_patches(&mut self, patch: Vec<Patch>) -> Result<(), Box<dyn std::error::Error>>;
+}
+
+#[derive(Clone, Default, Debug)]
+pub struct PatchSet {
+    pub xbpatchset_schema: u32,
+    pub name: String,
+    pub author: String,
+    pub version_major: u8,
+    pub version_minor: u8,
+    pub game_title: String,
+    pub entries: Vec<PatchEntry>,
+}
+
+impl PatchSet {
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PatchEntry {
+    name: String,
+    description: String,
+
+    // Specified if another author made a specific patch in a patch list
+    alt_author: Option<String>,
+
+    parameters: Vec<Parameter>,
+
+    patches: Vec<Patch>,
+}
+
+impl PatchEntry {
+    pub fn new(
+        name: String,
+        description: String,
+        alt_author: Option<String>,
+        patches: Vec<Patch>,
+    ) -> Self {
+        PatchEntry {
+            name,
+            description,
+            alt_author,
+            parameters: Default::default(),
+            patches,
+        }
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+
+    pub fn description(&self) -> &str {
+        &self.description
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -27,48 +103,6 @@ pub struct Patch {
         default = "get_none"
     )]
     pub original_bytes: Option<Vec<u8>>,
-}
-
-pub trait HasPatches {
-    fn add_patch(&mut self, patch: Patch);
-    fn get_patches(&self) -> &Vec<Patch>;
-
-    fn set_patches(&mut self, patch: Vec<Patch>) -> Result<(), Box<dyn std::error::Error>>;
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PatchEntry {
-    name: String,
-    description: String,
-
-    // Specified if another author made a specific patch in a patch list
-    alt_author: Option<String>,
-
-    patches: Vec<Patch>,
-}
-
-impl PatchEntry {
-    pub fn new(
-        name: String,
-        description: String,
-        alt_author: Option<String>,
-        patches: Vec<Patch>,
-    ) -> Self {
-        PatchEntry {
-            name,
-            description,
-            alt_author,
-            patches,
-        }
-    }
-
-    pub fn name(&self) -> &String {
-        &self.name
-    }
-
-    pub fn description(&self) -> &str {
-        &self.description
-    }
 }
 
 impl HasPatches for PatchEntry {
